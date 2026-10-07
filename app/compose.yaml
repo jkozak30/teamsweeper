@@ -1,0 +1,13 @@
+services:
+  mongo:
+    image: docker.io/library/mongo:8.0
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dev
+      MONGO_INITDB_ROOT_PASSWORD: dev
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
