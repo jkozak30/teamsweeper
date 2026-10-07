@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TeamsweeperWireHttp } from "../generated/wire.ts";
+import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 
 type Snapshot = NonNullable<
   TeamsweeperWireHttp["/game/current"]["output"]["snapshot"]

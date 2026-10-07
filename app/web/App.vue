@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
-import Board from "./Board.vue";
+import Sidebar from "./components/Sidebar.vue";
+import LobbyView from "./components/Lobby.vue";
+import GameView from "./components/Game.vue";
 
 const api = createHttpClient<TeamsweeperWireHttp>({
   baseUrl: "/api",
@@ -12,8 +14,7 @@ type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
 type Game = TeamsweeperWireHttp["/game/current"]["output"];
 type Coordinate = TeamsweeperWireHttp["/game/reveal"]["input"]["coord"];
 
-const name = ref("");
-const code = ref("");
+const screen = ref<"lobby" | "game">("lobby");
 const lobby = ref<Lobby | null>(null);
 const gameState = ref<Game | null>(null);
 const settings = ref({ height: 9, width: 9, mines: 10 });
@@ -37,6 +38,7 @@ let disposed = false;
 function clearRoom() {
   lobby.value = null;
   gameState.value = null;
+  screen.value = "lobby";
 }
 
 function report(error: string) {
@@ -52,7 +54,6 @@ function report(error: string) {
   if (error === "UNAUTHORIZED") clearRoom();
 }
 
-// Share one refresh at a time. Actions wait for older polls to finish.
 function refreshState(): Promise<void> {
   if (pending) return pending;
 
@@ -61,9 +62,7 @@ function refreshState(): Promise<void> {
     if (disposed) return;
 
     if ("error" in room) {
-      if (
-        ["UNAUTHORIZED", "FORBIDDEN", "CONFLICT"].includes(room.error)
-      ) {
+      if (["UNAUTHORIZED", "FORBIDDEN", "CONFLICT"].includes(room.error)) {
         if (lobby.value) {
           status.value = "Your room session is no longer available.";
         }
@@ -83,6 +82,13 @@ function refreshState(): Promise<void> {
       gameState.value = null;
       report(game.error);
       return;
+    }
+
+    // Open newly started/restored games, but preserve local navigation
+    // when a poll returns the same game.
+    if (game.snapshot && game.game !== gameState.value?.game) {
+      settings.value = { ...game.snapshot.settings };
+      screen.value = "game";
     }
 
     gameState.value = game;
@@ -114,25 +120,23 @@ async function run(operation: () => Promise<void>) {
   }
 }
 
-function createRoom() {
+function createRoom(name: string) {
   return run(async () => {
-    const result = await api.rooms.create({
-      name: name.value.trim(),
-    });
-
+    const result = await api.rooms.create({ name: name.trim() });
     if ("error" in result) return report(result.error);
+
     status.value = "Room created. Share the code with another player.";
   });
 }
 
-function joinRoom() {
+function joinRoom(name: string, code: string) {
   return run(async () => {
     const result = await api.rooms.join({
-      name: name.value.trim(),
-      code: code.value.trim().toUpperCase(),
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
     });
-
     if ("error" in result) return report(result.error);
+
     status.value = "Joined the room.";
   });
 }
@@ -158,8 +162,9 @@ function startGame() {
       room: lobby.value.room,
       settings: { ...settings.value },
     });
+    if ("error" in result) return report(result.error);
 
-    if ("error" in result) report(result.error);
+    screen.value = "game";
   });
 }
 
@@ -222,145 +227,67 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main>
-    <h1>Teamsweeper</h1>
+  <div class="layout">
+    <Sidebar
+      :lobby="lobby"
+      :screen="screen"
+      :busy="busy"
+      @create="createRoom"
+      @join="joinRoom"
+    />
 
-    <fieldset v-if="!lobby" :disabled="busy">
-      <legend>Enter a room</legend>
-
-      <label>
-        Your name
-        <input v-model="name" autocomplete="nickname" />
-      </label>
-
-      <form @submit.prevent="createRoom">
-        <button :disabled="!name.trim()">Create room</button>
-      </form>
-
-      <form @submit.prevent="joinRoom">
-        <label>
-          Room code
-          <input v-model="code" required />
-        </label>
-        <button :disabled="!name.trim() || !code.trim()">
-          Join room
-        </button>
-      </form>
-    </fieldset>
-
-    <section v-else>
-      <h2>Room</h2>
-
-      <p>
-        Code: <strong>{{ lobby.code }}</strong>
-        <button :disabled="busy" @click="copyCode">Copy code</button>
-      </p>
-
-      <h3>Players</h3>
-      <ul>
-        <li
-          v-for="player in lobby.members.participants"
-          :key="player.participant"
-        >
-          {{ player.name }}
-          <span v-if="player.participant === lobby.participant">(you)</span>
-          <span v-if="player.participant === lobby.host">(host)</span>
-        </li>
-      </ul>
-
-      <form v-if="isHost" @submit.prevent="startGame">
-        <fieldset :disabled="busy">
-          <legend>Board settings</legend>
-
-          <label>
-            Height
-            <input
-              v-model.number="settings.height"
-              type="number"
-              min="1"
-              step="1"
-              required
-            />
-          </label>
-          <label>
-            Width
-            <input
-              v-model.number="settings.width"
-              type="number"
-              min="1"
-              step="1"
-              required
-            />
-          </label>
-          <label>
-            Mines
-            <input
-              v-model.number="settings.mines"
-              type="number"
-              min="1"
-              :max="settings.height * settings.width - 1"
-              step="1"
-              required
-            />
-          </label>
-
-          <button>
-            {{ gameState?.game ? 'Start new game' : 'Start game' }}
-          </button>
-        </fieldset>
-      </form>
-      <p v-else>The host can start a game.</p>
-
-      <section v-if="gameState?.snapshot">
-        <h2>Game: {{ gameState.snapshot.status }}</h2>
+    <main>
+      <template v-if="lobby">
         <p>
-          Flags remaining: {{ gameState.snapshot.flagsRemaining }}
-          · Moves: {{ gameState.snapshot.clicks }}
-        </p>
-        <p>
-          Click to reveal. Right-click or Shift-click to flag.
-          Click a revealed number to chord.
+          Code: <strong>{{ lobby.code }}</strong>
+          <button :disabled="busy" @click="copyCode">Copy code</button>
         </p>
 
-        <Board
-          :width="gameState.snapshot.settings.width"
-          :cells="gameState.snapshot.cells"
-          :disabled="busy || finished"
+        <LobbyView
+          v-if="screen === 'lobby' || !gameState?.snapshot"
+          v-model:settings="settings"
+          :lobby="lobby"
+          :is-host="isHost"
+          :has-game="!!gameState?.snapshot"
+          :busy="busy"
+          @start="startGame"
+          @return="screen = 'game'"
+          @leave="leaveRoom"
+        />
+
+        <GameView
+          v-else
+          v-model:settings="settings"
+          :snapshot="gameState.snapshot"
+          :is-host="isHost"
+          :busy="busy"
           @reveal="move('reveal', $event)"
           @flag="(coord, value) => move('flag', coord, value)"
           @chord="move('chord', $event)"
+          @start="startGame"
+          @lobby="screen = 'lobby'"
+          @leave="leaveRoom"
         />
+      </template>
 
-        <section v-if="gameState.snapshot.results[0]">
-          <h3>Results</h3>
-          <dl>
-            <dt>Time</dt>
-            <dd>
-              {{ gameState.snapshot.results[0].time.toFixed(2) }} seconds
-            </dd>
-            <dt>3BV</dt>
-            <dd>{{ gameState.snapshot.results[0].bv }}</dd>
-            <dt>Moves</dt>
-            <dd>{{ gameState.snapshot.results[0].clicks }}</dd>
-            <dt>Speed</dt>
-            <dd>
-              {{ gameState.snapshot.results[0].speed.toFixed(2) }}
-              3BV units/second
-            </dd>
-            <dt>Efficiency</dt>
-            <dd>
-              {{ gameState.snapshot.results[0].efficiency.toFixed(2) }}
-              3BV units/move
-            </dd>
-          </dl>
-        </section>
-      </section>
-      <p v-else>No game has started yet.</p>
-
-      <button :disabled="busy" @click="leaveRoom">Leave room</button>
-    </section>
-
-    <p v-if="busy">Loading...</p>
-    <p role="status">{{ status }}</p>
-  </main>
+      <p v-else>Create or join a room to play.</p>
+      <p v-if="busy">Loading...</p>
+      <p role="status">{{ status }}</p>
+    </main>
+  </div>
 </template>
+
+<style scoped>
+.layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 650px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
