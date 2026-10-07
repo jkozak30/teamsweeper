@@ -10,3 +10,6 @@ This repository contains Julia's personal project code and design for 6.1040.
   - [III. Concept design](design/p1.md#concept-design)
   - [IV. UI sketches](design/p1.md#ui-sketches)
   - [V. User journey](design/p1.md#user-journey)
+- [P2: Design](design/p2.md)
+  - [I. Core User Journey](design/p2.md#core-user-journey)
+  - [II. Screen Recording](https://www.youtube.com/watch?v=moLanjo8Bjk)
