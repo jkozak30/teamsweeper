@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { createGateway } from "@mit-sdg/sync-engine/boundary";
-import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
+import { createTestApp } from "./test-app.ts";
 
 import { applicationConceptSet } from "../src/concepts.ts";
 import { composition } from "../src/compositions/Rooms.ts";
@@ -13,8 +11,8 @@ import { policy } from "../src/http.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
 let testDb: TestDb;
-let rooms: RoomJoiningConcept;
-let api: ReturnType<typeof createHttpHandler>;
+let api: ReturnType<typeof createTestApp>["api"];
+let rooms: ReturnType<typeof createTestApp>["rooms"];
 let now: Date;
 
 const origin = policy.publicOrigin ?? "http://127.0.0.1:3000";
@@ -26,21 +24,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   now = new Date();
-  rooms = new RoomJoiningConcept(testDb.db);
-
-  const application = assemble({
-    conceptSet: applicationConceptSet,
-    instances: {
-      MinesweeperPlaying: new MinesweeperPlayingConcept(testDb.db),
-      RoomJoining: rooms,
-      Sessioning: new SessioningConcept(testDb.db, () => now),
-      Annotating: new AnnotatingConcept(testDb.db),
-    },
-    composition: { Rooms: composition },
-  });
-
-  const gateway = createGateway({ application });
-  api = createHttpHandler({ application, gateway, policy });
+  ({ api, rooms } = createTestApp(testDb.db, () => now));
 });
 
 afterAll(async () => {
