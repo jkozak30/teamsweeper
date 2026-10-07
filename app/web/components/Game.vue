@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 import Board from "./Board.vue";
 import GameSettings from "./GameSettings.vue";
+import type { PlayerColors } from "../colors.ts";
 
 type Snapshot = NonNullable<
   TeamsweeperWireHttp["/game/current"]["output"]["snapshot"]
@@ -14,6 +15,9 @@ const props = defineProps<{
   snapshot: Snapshot;
   isHost: boolean;
   busy: boolean;
+  participant: string;
+  players: { participant: string; name: string }[];
+  colors: PlayerColors;
 }>();
 
 const settings = defineModel<Settings>("settings", {
@@ -24,6 +28,9 @@ const emit = defineEmits<{
   reveal: [coord: Coordinate];
   flag: [coord: Coordinate, value: boolean];
   chord: [coord: Coordinate];
+  highlight: [coord: Coordinate];
+  paint: [coords: Coordinate[]];
+  clear: [];
   start: [];
   lobby: [];
   leave: [];
@@ -53,13 +60,23 @@ function openSettings(event: Event) {
     <p>
       Click to reveal. Right-click or Shift-click to flag.
       Click a revealed number to chord.
+      Middle-click to toggle your highlight, or hold the middle button
+      and drag across cells to highlight them.
+      Left-click or right-click clears your highlights before making a move.
     </p>
 
     <div class="board-container">
       <Board
         :width="snapshot.settings.width"
         :cells="snapshot.cells"
-        :disabled="busy || finished"
+        :busy="busy"
+        :finished="finished"
+        :participant="participant"
+        :players="players"
+        :colors="colors"
+        @highlight="emit('highlight', $event)"
+        @paint="emit('paint', $event)"
+        @clear="emit('clear')"
         @reveal="emit('reveal', $event)"
         @flag="(coord, value) => emit('flag', coord, value)"
         @chord="emit('chord', $event)"
@@ -88,10 +105,7 @@ function openSettings(event: Event) {
     </section>
 
     <form v-if="isHost" @submit.prevent="emit('start')">
-      <details
-        v-if="finished"
-        @invalid.capture="openSettings"
-      >
+      <details v-if="finished" @invalid.capture="openSettings">
         <summary>Adjust settings</summary>
 
         <GameSettings

@@ -5,6 +5,7 @@ import type { TeamsweeperWireHttp } from "../generated/wire.ts";
 import Sidebar from "./components/Sidebar.vue";
 import LobbyView from "./components/Lobby.vue";
 import GameView from "./components/Game.vue";
+import { playerColors } from "./colors.ts";
 
 const api = createHttpClient<TeamsweeperWireHttp>({
   baseUrl: "/api",
@@ -31,6 +32,11 @@ const finished = computed(() =>
   gameState.value?.snapshot?.status === "LOST"
 );
 
+const colors = computed(() => playerColors(
+  lobby.value?.members.participants.map(player => player.participant) ?? [],
+  lobby.value?.room ?? "",
+));
+
 let pending: Promise<void> | null = null;
 let timer: ReturnType<typeof setInterval> | undefined;
 let disposed = false;
@@ -43,10 +49,10 @@ function clearRoom() {
 
 function report(error: string) {
   const messages: Record<string, string> = {
-    INVALID_REQUEST: "Check your name, room code, or board settings.",
-    NOT_FOUND: "Room or game not found.",
+    INVALID_REQUEST: "Check your name, room code, board settings, or selected cell.",
+    NOT_FOUND: "Room, game, or highlight not found.",
     FORBIDDEN: "You do not have permission to do that.",
-    CONFLICT: "That move is unavailable, or the current game has changed.",
+    CONFLICT: "That action is unavailable, or the current game has changed.",
     UNAUTHORIZED: "Your session has expired. Please join again.",
   };
 
@@ -174,15 +180,90 @@ function move(
   value = false,
 ) {
   const game = gameState.value?.game;
-  if (!game || finished.value) return;
+  if (!game) return;
 
   return run(async () => {
+    const cleared = await api.annotations.clear({ game });
+    if ("error" in cleared) return report(cleared.error);
+
+    if (finished.value) return;
+
     const result = kind === "flag"
       ? await api.game.flag({ game, coord, value })
       : kind === "reveal"
       ? await api.game.reveal({ game, coord })
       : await api.game.chord({ game, coord });
 
+    if ("error" in result) report(result.error);
+  });
+}
+
+function toggleHighlight(coord: Coordinate) {
+  const game = gameState.value?.game;
+  if (!game) return;
+
+  return run(async () => {
+    const state = gameState.value;
+    if (!state || state.game !== game) return report("CONFLICT");
+
+    const participant = lobby.value?.participant;
+    const cell = state.snapshot?.cells.find(cell =>
+      cell.coord.row === coord.row &&
+      cell.coord.column === coord.column
+    );
+    if (!participant || !cell) return;
+
+    const highlighted = cell.highlights.some(
+      value => value.participant === participant,
+    );
+
+    const result = highlighted
+      ? await api.annotations.remove({ game, coord })
+      : await api.annotations.highlight({ game, coord });
+
+    if ("error" in result) report(result.error);
+  });
+}
+
+function paintHighlights(coords: Coordinate[]) {
+  const game = gameState.value?.game;
+  if (!game) return;
+
+  return run(async () => {
+    const state = gameState.value;
+    if (!state || state.game !== game) return report("CONFLICT");
+
+    const participant = lobby.value?.participant;
+    if (!participant || !state.snapshot) return;
+
+    const existing = new Set(
+      state.snapshot.cells
+        .filter(cell =>
+          cell.highlights.some(
+            value => value.participant === participant,
+          )
+        )
+        .map(cell => `${cell.coord.row},${cell.coord.column}`),
+    );
+
+    for (const coord of coords) {
+      const key = `${coord.row},${coord.column}`;
+      if (existing.has(key)) continue;
+
+      const result = await api.annotations.highlight({ game, coord });
+      if ("error" in result) return report(result.error);
+
+      existing.add(key);
+    }
+  });
+}
+
+function clearHighlights() {
+  const game = gameState.value?.game;
+  if (!game) return;
+
+  return run(async () => {
+    const result = await api.annotations.clear({ game });
     if ("error" in result) report(result.error);
   });
 }
@@ -230,6 +311,7 @@ onUnmounted(() => {
   <div class="layout">
     <Sidebar
       :lobby="lobby"
+      :colors="colors"
       :screen="screen"
       :busy="busy"
       @create="createRoom"
@@ -247,6 +329,7 @@ onUnmounted(() => {
           v-if="screen === 'lobby' || !gameState?.snapshot"
           v-model:settings="settings"
           :lobby="lobby"
+          :colors="colors"
           :is-host="isHost"
           :has-game="!!gameState?.snapshot"
           :busy="busy"
@@ -259,11 +342,17 @@ onUnmounted(() => {
           v-else
           v-model:settings="settings"
           :snapshot="gameState.snapshot"
+          :participant="lobby.participant"
+          :players="lobby.members.participants"
+          :colors="colors"
           :is-host="isHost"
           :busy="busy"
           @reveal="move('reveal', $event)"
           @flag="(coord, value) => move('flag', coord, value)"
           @chord="move('chord', $event)"
+          @highlight="toggleHighlight"
+          @paint="paintHighlights"
+          @clear="clearHighlights"
           @start="startGame"
           @lobby="screen = 'lobby'"
           @leave="leaveRoom"

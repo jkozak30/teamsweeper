@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 import GameSettings from "./GameSettings.vue";
+import { tint, type PlayerColors } from "../colors.ts";
 
 type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
 type Settings = TeamsweeperWireHttp["/game/start"]["input"]["settings"];
@@ -10,6 +11,7 @@ defineProps<{
   isHost: boolean;
   hasGame: boolean;
   busy: boolean;
+  colors: PlayerColors;
 }>();
 
 const settings = defineModel<Settings>("settings", {
@@ -33,6 +35,17 @@ const emit = defineEmits<{
         v-for="player in lobby.members.participants"
         :key="player.participant"
       >
+        <span
+          class="swatch"
+          aria-hidden="true"
+          :style="{
+            backgroundColor: tint(
+              colors[player.participant]
+                ? [colors[player.participant]!]
+                : [],
+            ),
+          }"
+        ></span>
         {{ player.name }}
         <span v-if="player.participant === lobby.participant">(you)</span>
         <span v-if="player.participant === lobby.host">(host)</span>
@@ -65,3 +78,14 @@ const emit = defineEmits<{
     </button>
   </section>
 </template>
+
+<style scoped>
+.swatch {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid #555;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+}
+</style>
