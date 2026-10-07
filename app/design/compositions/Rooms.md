@@ -25,14 +25,19 @@ A requester [reads their current lobby](reaction:Rooms.Current).
 The HTTP adapter supplies the session from its cookie, and
 Sessioning.current resolves it to the participant identity.
 
-The endpoint checks that the participant is active and their room
-is open. It returns the participant identity, room identity, code,
-host, and [active room participants](former:Rooms.Members).
+The [active lobby lookup](view:Rooms.ActiveLobby) finds the
+participant's room when their membership is active and the room
+is open. It returns the room identity, code, and host, or no rows
+when there is no matching active lobby.
+
+The endpoint returns these details, the requester’s participant
+identity, and the [active room participants](former:Rooms.Members).
 The former lists each active participant's identity and display name.
 
 Unknown, ended, or expired sessions produce an unauthorized response.
-Inactive participants produce a forbidden response, and a room that
-is missing or closed produces a conflict response.
+Inactive or missing participants produce a forbidden response.
+An active participant whose room is missing or closed receives
+a conflict response.
 
 ```endpoints
 Rooms.Current at /rooms/current

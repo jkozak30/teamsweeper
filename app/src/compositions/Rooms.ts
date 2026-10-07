@@ -4,7 +4,14 @@ import {
   respond,
   type EndpointValidator,
 } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, where } from "@mit-sdg/sync-engine/language";
+import {
+  each,
+  form,
+  former,
+  no,
+  view,
+  where,
+} from "@mit-sdg/sync-engine/language";
 
 import { concepts } from "../concepts.ts";
 
@@ -82,6 +89,22 @@ const Join = endpoint(
   },
 );
 
+const ActiveLobby = view(
+  "the active lobby of (participant)",
+  ({ participant }, { room, code, host }, _bindings) =>
+    where(
+      RoomJoining._getParticipant({ participant }).is({
+        room,
+        active: true,
+      }),
+      RoomJoining._getRoom({ room }).is({
+        code,
+        status: "OPEN",
+        host,
+      }),
+    ),
+).optional();
+
 const Members = former(
   "the active room participants",
   ({ room }, { participant, name }) =>
@@ -101,15 +124,7 @@ const Current = endpoint(
       }))
       .then(
         where(
-          RoomJoining._getParticipant({ participant }).is({
-            room,
-            active: true,
-          }),
-          RoomJoining._getRoom({ room }).is({
-            code,
-            status: "OPEN",
-            host,
-          }),
+          ActiveLobby({ participant }).is({ room, code, host }),
         )
           .then(respond({
             participant,
@@ -167,6 +182,7 @@ const Leave = endpoint(
 export const composition = {
   Create,
   Join,
+  ActiveLobby,
   Members,
   Current,
   Leave,
