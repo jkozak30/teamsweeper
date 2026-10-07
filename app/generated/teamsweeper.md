@@ -92,7 +92,7 @@ _Views name reusable conditions. Multiple `where` blocks are alternatives._
 ### the active lobby of (participant)
 
 Authored path: `Rooms.ActiveLobby`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 15.
 
 ```view
 the active lobby of (participant) — inputs (participant); outputs (room, code, host); bindings () — answers at most one (room, code, host)
@@ -143,7 +143,7 @@ _the authored explanation; this section records the generated shape._
 ### the active room participants
 
 Authored path: `Rooms.Members`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 34.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
 
 ```former
 Former "the active room participants" — inputs (room); bindings (participant, name); promises exactly one record — forms:
@@ -659,8 +659,8 @@ then
 ### Rooms.Create
 
 Authored path: `Rooms.Create`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 3.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when RequestBoundary.request (name, path: "/rooms/create", requestId)
@@ -671,8 +671,8 @@ then
 ### Rooms.Create#2
 
 Authored path: `Rooms.Create`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 3.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when RoomJoining.create (name, code, participant, room), asked by Rooms.Create
@@ -683,8 +683,8 @@ then
 ### Rooms.Create#3
 
 Authored path: `Rooms.Create`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 3.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Create#2
@@ -698,8 +698,8 @@ then
 ### Rooms.Current
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 43.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/current", requestId, session)
@@ -710,8 +710,8 @@ then
 ### Rooms.Current:participant-inactive#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 43.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
@@ -725,8 +725,8 @@ then
 ### Rooms.Current:room-open#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 43.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
@@ -740,8 +740,8 @@ then
 ### Rooms.Current:room-unavailable#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 43.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
@@ -756,8 +756,8 @@ then
 ### Rooms.Join
 
 Authored path: `Rooms.Join`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 4.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
 
 ```reaction
 when RequestBoundary.request (code, name, path: "/rooms/join", requestId)
@@ -768,8 +768,8 @@ then
 ### Rooms.Join#2
 
 Authored path: `Rooms.Join`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 4.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
 
 ```reaction
 when RoomJoining.join (code, name, participant), asked by Rooms.Join
@@ -780,8 +780,8 @@ then
 ### Rooms.Join#3
 
 Authored path: `Rooms.Join`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 4.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
 
 ```reaction
 when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Join#2
@@ -794,8 +794,8 @@ then
 ### Rooms.Leave
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 48.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 57.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/leave", requestId, session)
@@ -806,8 +806,8 @@ then
 ### Rooms.Leave#2
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 48.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 57.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Leave
@@ -818,8 +818,8 @@ then
 ### Rooms.Leave#3
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 48.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 57.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
 
 ```reaction
 when RoomJoining.leave (participant), asked by Rooms.Leave#2
@@ -832,8 +832,8 @@ then
 ### Rooms.Leave#4
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 48.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 57.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
 
 ```reaction
 when Sessioning.end (session, ended), asked by Rooms.Leave#3
