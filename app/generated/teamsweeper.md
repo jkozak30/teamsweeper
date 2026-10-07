@@ -101,6 +101,40 @@ the active lobby of (participant) — inputs (participant); outputs (room, code,
     RoomJoining._getRoom (room) has (code, host, status: "OPEN")
 ```
 
+### the current game of (room)
+
+Authored path: `Game.CurrentGame`.
+- Covered by [Game](../design/compositions/Game.md), line 16.
+
+```view
+the current game of (room) — inputs (room); outputs (game); bindings () — answers at most one (game)
+  where RoomJoining._getRoom (room) has (currentGame: game, status: "OPEN")
+```
+
+### the open room of active (participant)
+
+Authored path: `Game.ActiveRoom`.
+- Covered by [Game](../design/compositions/Game.md), line 5.
+
+```view
+the open room of active (participant) — inputs (participant); outputs (room, host); bindings () — answers at most one (room, host)
+  where
+    RoomJoining._getParticipant (participant) has (active: true, room)
+    RoomJoining._getRoom (room) has (host, status: "OPEN")
+```
+
+### whether (participant) may play (game)
+
+Authored path: `Game.PlayableGame`.
+- Covered by [Game](../design/compositions/Game.md), line 15.
+
+```view
+whether (participant) may play (game) — inputs (participant, game); outputs (); bindings (room)
+  where
+    view "the open room of active (participant)" with (participant) has (room)
+    view "the current game of (room)" with (room) has (game)
+```
+
 ## Formers
 
 _Formers name result shapes evaluated when asked. The source former owns_
@@ -118,6 +152,42 @@ Former "the active room participants" — inputs (room); bindings (participant, 
       form a record of
         name
         participant
+```
+
+### the visible game state
+
+Authored path: `Game.Snapshot`.
+- Covered by [Game](../design/compositions/Game.md), line 27.
+
+```former
+Former "the visible game state" — inputs (game); bindings (settings, status, clicks, flagsRemaining, startedAt, endedAt, coord, revealed, flagged, adjacent, mine, triggered, time, bv, resultClicks, speed, efficiency); promises exactly one record — forms:
+  a record of
+    where MinesweeperPlaying._getGame (game) has (clicks, flagsRemaining, settings, status)
+    where whether MinesweeperPlaying._getGame (game) has (startedAt)
+    where whether MinesweeperPlaying._getGame (game) has (endedAt)
+    cells: each MinesweeperPlaying._visibleCells (game) has (coord, flagged, revealed)
+      where whether MinesweeperPlaying._visibleCells (game) has (adjacent, coord)
+      where whether MinesweeperPlaying._visibleCells (game) has (coord, mine, triggered)
+      form a record of
+        adjacent
+        coord
+        flagged
+        mine
+        revealed
+        triggered
+    clicks
+    endedAt
+    flagsRemaining
+    results: each MinesweeperPlaying._getResult (game) has (bv, clicks: resultClicks, efficiency, speed, time)
+      form a record of
+        bv
+        clicks: resultClicks
+        efficiency
+        speed
+        time
+    settings
+    startedAt
+    status
 ```
 
 ## Reactions
@@ -140,6 +210,450 @@ where
   earlier, RequestBoundary.request (requestId)
 then
   RequestBoundary.respond (error: message, requestId)
+```
+
+### Game.Chord
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Game.Chord:inactive#2
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Chord
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Chord:member-moves#2
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Chord
+where
+  instant is the current flow's instant
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  view "whether (participant) may play (game)" with (game, participant)
+then
+  MinesweeperPlaying.chord (coord, game, now: instant)
+```
+
+### Game.Chord:member-moves#3
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when MinesweeperPlaying.chord (coord, game, now: instant), asked by Game.Chord:member-moves#2
+where
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+then
+  RequestBoundary.respond (game, requestId)
+```
+
+### Game.Chord:room-unavailable#2
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Chord
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Game.Chord:wrong-game#2
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 23.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Chord
+where
+  view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  no view "whether (participant) may play (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
+
+### Game.Current
+
+Authored path: `Game.Current`.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+- Covered by [Game](../design/compositions/Game.md), line 33.
+
+```reaction
+when RequestBoundary.request (path: "/game/current", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Game.Current:current-game#2
+
+Authored path: `Game.Current`.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+- Covered by [Game](../design/compositions/Game.md), line 33.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Current
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  view "the current game of (room)" with (room) has (game)
+  earlier, RequestBoundary.request (path: "/game/current", requestId, session)
+then
+  RequestBoundary.respond (game, requestId, snapshot: former "the visible game state" with (game))
+```
+
+### Game.Current:inactive#2
+
+Authored path: `Game.Current`.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+- Covered by [Game](../design/compositions/Game.md), line 33.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Current
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (path: "/game/current", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Current:no-game#2
+
+Authored path: `Game.Current`.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+- Covered by [Game](../design/compositions/Game.md), line 33.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Current
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  no view "the current game of (room)" with (room)
+  earlier, RequestBoundary.request (path: "/game/current", requestId, session)
+then
+  RequestBoundary.respond (game: null, requestId, snapshot: null)
+```
+
+### Game.Current:room-unavailable#2
+
+Authored path: `Game.Current`.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+- Covered by [Game](../design/compositions/Game.md), line 33.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Current
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (path: "/game/current", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Game.Flag
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+then
+  Sessioning.current (session)
+```
+
+### Game.Flag:inactive#2
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Flag
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Flag:member-moves#2
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Flag
+where
+  instant is the current flow's instant
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  view "whether (participant) may play (game)" with (game, participant)
+then
+  MinesweeperPlaying.flag (coord, game, value)
+```
+
+### Game.Flag:member-moves#3
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when MinesweeperPlaying.flag (coord, game, value), asked by Game.Flag:member-moves#2
+where
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+then
+  RequestBoundary.respond (game, requestId)
+```
+
+### Game.Flag:room-unavailable#2
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Flag
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Game.Flag:wrong-game#2
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Flag
+where
+  view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  no view "whether (participant) may play (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
+
+### Game.Reveal
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Game.Reveal:inactive#2
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Reveal
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Reveal:member-moves#2
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Reveal
+where
+  instant is the current flow's instant
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  view "whether (participant) may play (game)" with (game, participant)
+then
+  MinesweeperPlaying.reveal (coord, game, now: instant)
+```
+
+### Game.Reveal:member-moves#3
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when MinesweeperPlaying.reveal (coord, game, now: instant), asked by Game.Reveal:member-moves#2
+where
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+then
+  RequestBoundary.respond (game, requestId)
+```
+
+### Game.Reveal:room-unavailable#2
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Reveal
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Game.Reveal:wrong-game#2
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Reveal
+where
+  view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  no view "whether (participant) may play (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
+
+### Game.Start
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  Sessioning.current (session)
+```
+
+### Game.Start:host-starts#2
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Start
+where
+  view "the open room of active (participant)" with (participant) has (host: participant, room)
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  MinesweeperPlaying.create (settings)
+```
+
+### Game.Start:host-starts#3
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when MinesweeperPlaying.create (settings, game), asked by Game.Start:host-starts#2
+where
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  RoomJoining.associate (game, room)
+```
+
+### Game.Start:host-starts#4
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when RoomJoining.associate (game, room), asked by Game.Start:host-starts#3
+where
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  RequestBoundary.respond (game, requestId)
+```
+
+### Game.Start:inactive#2
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Start
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Start:not-host#2
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Start
+where
+  view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+  no view "the open room of active (participant)" with (participant) has (host: participant, room)
+then
+  RequestBoundary.respond (error: "HOST_REQUIRED", requestId)
+```
+
+### Game.Start:room-unavailable#2
+
+Authored path: `Game.Start`.
+- Covered by [Game](../design/compositions/Game.md), line 3.
+- Covered by [Game](../design/compositions/Game.md), line 10.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Start
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
 
 ### Rooms.Create
@@ -336,6 +850,11 @@ object or lacks a required key. The response uses `INVALID_INPUT` and names
 the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
+- `/game/chord` — requires `session`, `game`, `coord`
+- `/game/current` — requires `session`
+- `/game/flag` — requires `session`, `game`, `coord`, `value`
+- `/game/reveal` — requires `session`, `game`, `coord`
+- `/game/start` — requires `session`, `room`, `settings`
 - `/rooms/create` — requires `name`
 - `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`

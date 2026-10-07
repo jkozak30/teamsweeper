@@ -14,6 +14,86 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type AppWideError = never;
 
 export type TeamsweeperWire = {
+  "/game/chord": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["game"]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["game"]>>;
+    };
+    error: { error: AppWideError | "GAME_NOT_CURRENT" | "GAME_NOT_FOUND" | "INVALID_INPUT" | "MOVE_NOT_ALLOWED" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
+  "/game/current": {
+    input: {
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>>;
+      "snapshot": {
+        "cells": ({
+          "adjacent": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["adjacent"]>> | null;
+          "coord": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["coord"]>>;
+          "flagged": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["flagged"]>>;
+          "mine": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["mine"]>> | null;
+          "revealed": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["revealed"]>>;
+          "triggered": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["triggered"]>> | null;
+        })[];
+        "clicks": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["clicks"]>>;
+        "endedAt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["endedAt"]>> | null;
+        "flagsRemaining": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["flagsRemaining"]>>;
+        "results": {
+          "bv": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["bv"]>>;
+          "clicks": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["clicks"]>>;
+          "efficiency": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["efficiency"]>>;
+          "speed": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["speed"]>>;
+          "time": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["time"]>>;
+        }[];
+        "settings": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["settings"]>>;
+        "startedAt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["startedAt"]>> | null;
+        "status": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["status"]>>;
+      };
+    } | {
+      "game": null;
+      "snapshot": null;
+    };
+    error: { error: AppWideError | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
+  "/game/flag": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["game"]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+      "value": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["value"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["game"]>>;
+    };
+    error: { error: AppWideError | "GAME_NOT_CURRENT" | "GAME_NOT_FOUND" | "INVALID_INPUT" | "MOVE_NOT_ALLOWED" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
+  "/game/reveal": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["game"]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["game"]>>;
+    };
+    error: { error: AppWideError | "GAME_NOT_CURRENT" | "GAME_NOT_FOUND" | "INVALID_INPUT" | "MOVE_NOT_ALLOWED" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
+  "/game/start": {
+    input: {
+      "room": Jsonify<OneOf<[AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>[0], ["room"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getParticipant"]>>>, ["room"]>]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["associate"]>[0], ["room"]>]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+      "settings": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["create"]>[0], ["settings"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["associate"]>[0], ["game"]>>;
+    };
+    error: { error: AppWideError | "GAME_ALREADY_ASSOCIATED" | "HOST_REQUIRED" | "INVALID_INPUT" | "INVALID_SETTINGS" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
   "/rooms/create": {
     input: {
       "name": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>[0], ["name"]>>;
@@ -71,6 +151,80 @@ export type TeamsweeperWire = {
 export type HttpAppWideError = never;
 
 export type TeamsweeperWireHttp = {
+  "/game/chord": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["game"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["chord"]>[0], ["game"]>>;
+    };
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "NOT_FOUND" | "UNAUTHORIZED" };
+  };
+  "/game/current": {
+    input: Record<string, never>;
+    output: {
+      "game": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>>;
+      "snapshot": {
+        "cells": ({
+          "adjacent": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["adjacent"]>> | null;
+          "coord": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["coord"]>>;
+          "flagged": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["flagged"]>>;
+          "mine": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["mine"]>> | null;
+          "revealed": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["revealed"]>>;
+          "triggered": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["triggered"]>> | null;
+        })[];
+        "clicks": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["clicks"]>>;
+        "endedAt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["endedAt"]>> | null;
+        "flagsRemaining": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["flagsRemaining"]>>;
+        "results": {
+          "bv": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["bv"]>>;
+          "clicks": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["clicks"]>>;
+          "efficiency": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["efficiency"]>>;
+          "speed": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["speed"]>>;
+          "time": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getResult"]>>>, ["time"]>>;
+        }[];
+        "settings": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["settings"]>>;
+        "startedAt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["startedAt"]>> | null;
+        "status": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>>>, ["status"]>>;
+      };
+    } | {
+      "game": null;
+      "snapshot": null;
+    };
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };
+  };
+  "/game/flag": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["game"]>>;
+      "value": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["value"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["flag"]>[0], ["game"]>>;
+    };
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "NOT_FOUND" | "UNAUTHORIZED" };
+  };
+  "/game/reveal": {
+    input: {
+      "coord": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["coord"]>>;
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["game"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["reveal"]>[0], ["game"]>>;
+    };
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "NOT_FOUND" | "UNAUTHORIZED" };
+  };
+  "/game/start": {
+    input: {
+      "room": Jsonify<OneOf<[AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>[0], ["room"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getParticipant"]>>>, ["room"]>]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["associate"]>[0], ["room"]>]>>;
+      "settings": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["create"]>[0], ["settings"]>>;
+    };
+    output: {
+      "game": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["associate"]>[0], ["game"]>>;
+    };
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };
+  };
   "/rooms/create": {
     input: {
       "name": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>[0], ["name"]>>;

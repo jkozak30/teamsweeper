@@ -1,6 +1,7 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 
-import { composition } from "./compositions/Rooms.ts";
+import { composition as RoomComposition } from "./compositions/Rooms.ts";
+import { composition as gameComposition } from "./compositions/Game.ts";
 import { MinesweeperPlayingConcept } from "./concepts/MinesweeperPlaying.ts";
 import { RoomJoiningConcept } from "./concepts/RoomJoining.ts";
 import { SessioningConcept } from "./concepts/Sessioning.ts";
@@ -16,7 +17,8 @@ export function assembleApplication() {
       Sessioning: new SessioningConcept(db),
     },
     composition: {
-      Rooms: composition,
+      Rooms: RoomComposition,
+      Game: gameComposition,
     },
     rawFaultReporter: ({ error }) => console.error(error),
   });

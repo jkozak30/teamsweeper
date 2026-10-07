@@ -12,6 +12,7 @@ export default {
     documents: [
       new URL("./design/types.md", import.meta.url),
       new URL("./design/compositions/Rooms.md", import.meta.url),
+      new URL("./design/compositions/Game.md", import.meta.url),
     ],
   },
   projections: [
