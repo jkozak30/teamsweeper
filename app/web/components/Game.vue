@@ -18,6 +18,7 @@ const props = defineProps<{
   participant: string;
   players: { participant: string; name: string }[];
   colors: PlayerColors;
+  pendingCell: string | null;
 }>();
 
 const settings = defineModel<Settings>("settings", {
@@ -74,6 +75,7 @@ function openSettings(event: Event) {
         :participant="participant"
         :players="players"
         :colors="colors"
+        :pending-cell="pendingCell"
         @highlight="emit('highlight', $event)"
         @paint="emit('paint', $event)"
         @clear="emit('clear')"

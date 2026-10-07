@@ -17,6 +17,7 @@ const props = defineProps<{
   participant: string;
   players: { participant: string; name: string }[];
   colors: PlayerColors;
+  pendingCell: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -152,8 +153,12 @@ function label(cell: Cell) {
       v-for="cell in cells"
       :key="key(cell.coord)"
       type="button"
-      :disabled="busy"
-      :class="{ revealed: cell.revealed, triggered: cell.triggered }"
+      :aria-disabled="busy"
+      :class="{
+        revealed: cell.revealed,
+        triggered: cell.triggered,
+        pending: pendingCell === key(cell.coord),
+      }"
       :style="{
         backgroundImage: `linear-gradient(${cellTint(cell)}, ${cellTint(cell)})`,
       }"
@@ -207,7 +212,8 @@ button.triggered {
   border-color: #b00020;
 }
 
-button:disabled {
-  opacity: 0.65;
+button.pending {
+  outline: 2px dotted #444;
+  outline-offset: -3px;
 }
 </style>
