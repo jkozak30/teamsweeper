@@ -83,6 +83,14 @@ export const applicationConceptSet = conceptSet({
   RoomJoining: roomJoining,
   Sessioning: sessioning,
   Annotating: annotating,
+}, {
+  gameCell: ({ game, coord }: {
+    game: string;
+    coord: { row: number; column: number };
+  }) => ({
+    game,
+    coord: { row: coord.row, column: coord.column },
+  }),
 });
 
-export const { concepts } = applicationConceptSet;
+export const { concepts, computations } = applicationConceptSet;

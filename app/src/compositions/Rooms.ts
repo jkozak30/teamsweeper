@@ -172,6 +172,7 @@ const Leave = endpoint(
       }))
       .then(RoomJoining.leave({ participant }).responds({}))
       .then(Sessioning.end({ session }).responds({ ended }))
+      .afterFlowSettles()
       .then(respond({ ended })),
   {
     input: { required: ["session"] },

@@ -5,8 +5,8 @@ and participants highlight cells identified by game and coordinate.
 
 ```types
 concrete GameCell
-  A string encoding [game, row, column] with JSON.stringify,
-  identifying one cell in one MinesweeperPlaying game.
+  A record { game, coord: { row, column } }, identifying one cell
+  in one MinesweeperPlaying game.
 ```
 
 ```instances

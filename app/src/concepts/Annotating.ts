@@ -3,10 +3,36 @@ import { MongoServerError, type Collection, type Db } from "mongodb";
 export class AlreadyHighlighted extends Error {}
 export class HighlightNotFound extends Error {}
 
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type Item = string | { [key: string]: JsonValue };
+
+// Equal objects should have equal identities regardless of field order.
+function canonical(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(canonical);
+
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value).sort().map(key => [
+        key,
+        canonical(value[key]!),
+      ]),
+    );
+  }
+
+  return value;
+}
+
 interface AnnotationDocument {
   _id: string;
   author: string;
-  target: string;
+  target: Item;
 }
 
 export class AnnotatingConcept {
@@ -18,13 +44,14 @@ export class AnnotatingConcept {
     );
   }
 
-  async highlight({ user, item }: { user: string; item: string }) {
+  async highlight({ user, item }: { user: string; item: Item }) {
+    const target = canonical(item) as Item;
+
     try {
-      // MongoDB enforces uniqueness of the author/target pair.
       await this.annotations.insertOne({
-        _id: JSON.stringify([user, item]),
+        _id: JSON.stringify([user, target]),
         author: user,
-        target: item,
+        target,
       });
     } catch (error) {
       if (error instanceof MongoServerError && error.code === 11000) {
@@ -32,16 +59,16 @@ export class AnnotatingConcept {
           "You have already highlighted that item.",
         );
       }
+
       throw error;
     }
 
     return {};
   }
 
-  async remove({ user, item }: { user: string; item: string }) {
+  async remove({ user, item }: { user: string; item: Item }) {
     const result = await this.annotations.deleteOne({
-      author: user,
-      target: item,
+      _id: JSON.stringify([user, canonical(item)]),
     });
 
     if (result.deletedCount === 0) {
@@ -58,9 +85,9 @@ export class AnnotatingConcept {
     return {};
   }
 
-  async _forItem({ item }: { item: string }) {
+  async _forItem({ item }: { item: Item }) {
     const documents = await this.annotations
-      .find({ target: item })
+      .find({ target: canonical(item) as Item })
       .sort({ author: 1 })
       .toArray();
 
@@ -70,7 +97,7 @@ export class AnnotatingConcept {
   async _byUser({ user }: { user: string }) {
     const documents = await this.annotations
       .find({ author: user })
-      .sort({ target: 1 })
+      .sort({ _id: 1 })
       .toArray();
 
     return documents.map(({ target }) => ({ target }));

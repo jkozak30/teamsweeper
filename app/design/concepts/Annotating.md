@@ -65,6 +65,6 @@ _forItem(item: Item) : many (author: User)
   Returns no rows when the item has no highlights.
 
 _byUser(user: User) : many (target: Item)
-  Returns the items highlighted by the user, ordered by target identity.
+  Returns the items highlighted by the user, ordered by canonical target encoding.
   Returns no rows when the user has no highlights.
 ```

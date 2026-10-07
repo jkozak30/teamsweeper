@@ -24,7 +24,8 @@ Rooms.Current at /rooms/current
 A requester [leaves their room](reaction:Rooms.Leave).
 Sessioning identifies the participant, RoomJoining handles departure,
 host reassignment, and room closing, then Sessioning ends the session
-and the HTTP adapter clears the cookie.
+and the HTTP adapter clears the cookie. Successful departure also clears
+the participant's annotations.
 
 ```endpoints
 Rooms.Leave at /rooms/leave

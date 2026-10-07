@@ -114,6 +114,10 @@ Concrete types:
 
 - `GameCell` — [Application types](../design/types.md), line 7.
 
+## Computations
+
+- `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 27.
+
 ## Views
 
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
@@ -128,6 +132,18 @@ the active lobby of (participant) — inputs (participant); outputs (room, code,
   where
     RoomJoining._getParticipant (participant) has (active: true, room)
     RoomJoining._getRoom (room) has (code, host, status: "OPEN")
+```
+
+### the cell identity in (game) at (coord)
+
+Authored path: `Annotations.Cell`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 8.
+
+```view
+the cell identity in (game) at (coord) — inputs (game, coord); outputs (item); bindings () — answers at most one (item)
+  where
+    MinesweeperPlaying._visibleCells (game) has (coord)
+    item is gameCell (coord, game)
 ```
 
 ### the current game of (room)
@@ -150,6 +166,18 @@ the open room of active (participant) — inputs (participant); outputs (room, h
   where
     RoomJoining._getParticipant (participant) has (active: true, room)
     RoomJoining._getRoom (room) has (host, status: "OPEN")
+```
+
+### whether (participant) may annotate (game)
+
+Authored path: `Annotations.MayAnnotate`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 6.
+
+```view
+whether (participant) may annotate (game) — inputs (participant, game); outputs (); bindings (room)
+  where
+    view "the active lobby of (participant)" with (participant) has (room)
+    RoomJoining._getRoom (room) has (currentGame: game)
 ```
 
 ### whether (participant) may play (game)
@@ -183,6 +211,20 @@ Former "the active room participants" — inputs (room); bindings (participant, 
         participant
 ```
 
+### the cell highlighters
+
+Authored path: `Annotations.CellHighlights`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
+
+```former
+Former "the cell highlighters" — inputs (game, coord); bindings (item, author); promises exactly one record — forms:
+  a record of
+    where item is gameCell (coord, game)
+    highlights: each Annotating._forItem (item) has (author)
+      form a record of
+        participant: author
+```
+
 ### the visible game state
 
 Authored path: `Game.Snapshot`.
@@ -204,6 +246,7 @@ Former "the visible game state" — inputs (game); bindings (settings, status, c
         mine
         revealed
         triggered
+        … former "the cell highlighters" with (coord, game)
     clicks
     endedAt
     flagsRemaining
@@ -220,6 +263,315 @@ Former "the visible game state" — inputs (game); bindings (settings, status, c
 ```
 
 ## Reactions
+
+### Annotations.Clear
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Annotations.Clear:inactive#2
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Clear
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Annotations.Clear:member-edits#2
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Clear
+where
+  earlier, RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+  view "whether (participant) may annotate (game)" with (game, participant)
+then
+  Annotating.clear (user: participant)
+```
+
+### Annotations.Clear:member-edits#3
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when Annotating.clear (user: participant), asked by Annotations.Clear:member-edits#2
+where
+  earlier, RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### Annotations.Clear:room-unavailable#2
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Clear
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Annotations.Clear:wrong-game#2
+
+Authored path: `Annotations.Clear`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Clear
+where
+  view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
+  no view "whether (participant) may annotate (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
+
+### Annotations.ClearOnLeave
+
+Authored path: `Annotations.ClearOnLeave`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 23.
+
+```reaction
+when RoomJoining.leave (participant)
+then
+  Annotating.clear (user: participant)
+```
+
+### Annotations.Highlight
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Annotations.Highlight:inactive#2
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Annotations.Highlight:invalid-cell#2
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  view "whether (participant) may annotate (game)" with (game, participant)
+  no view "the cell identity in (game) at (coord)" with (coord, game)
+then
+  RequestBoundary.respond (error: "INVALID_COORDINATE", requestId)
+```
+
+### Annotations.Highlight:member-edits#2
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  view "whether (participant) may annotate (game)" with (game, participant)
+  view "the cell identity in (game) at (coord)" with (coord, game) has (item)
+then
+  Annotating.highlight (item, user: participant)
+```
+
+### Annotations.Highlight:member-edits#3
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Annotating.highlight (item, user: participant), asked by Annotations.Highlight:member-edits#2
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### Annotations.Highlight:room-unavailable#2
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Annotations.Highlight:wrong-game#2
+
+Authored path: `Annotations.Highlight`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 3.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
+where
+  view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  no view "whether (participant) may annotate (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
+
+### Annotations.Remove
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Annotations.Remove:inactive#2
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Remove
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Annotations.Remove:invalid-cell#2
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Remove
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+  view "whether (participant) may annotate (game)" with (game, participant)
+  no view "the cell identity in (game) at (coord)" with (coord, game)
+then
+  RequestBoundary.respond (error: "INVALID_COORDINATE", requestId)
+```
+
+### Annotations.Remove:member-edits#2
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Remove
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+  view "whether (participant) may annotate (game)" with (game, participant)
+  view "the cell identity in (game) at (coord)" with (coord, game) has (item)
+then
+  Annotating.remove (item, user: participant)
+```
+
+### Annotations.Remove:member-edits#3
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Annotating.remove (item, user: participant), asked by Annotations.Remove:member-edits#2
+where
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### Annotations.Remove:room-unavailable#2
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Remove
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Annotations.Remove:wrong-game#2
+
+Authored path: `Annotations.Remove`.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 4.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Annotations.Remove
+where
+  view "the active lobby of (participant)" with (participant)
+  earlier, RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
+  no view "whether (participant) may annotate (game)" with (game, participant)
+then
+  RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
+```
 
 ### DeliverFaultToAsker
 
@@ -334,7 +686,7 @@ then
 
 Authored path: `Game.Current`.
 - Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 33.
+- Covered by [Game](../design/compositions/Game.md), line 32.
 
 ```reaction
 when RequestBoundary.request (path: "/game/current", requestId, session)
@@ -346,7 +698,7 @@ then
 
 Authored path: `Game.Current`.
 - Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 33.
+- Covered by [Game](../design/compositions/Game.md), line 32.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -362,7 +714,7 @@ then
 
 Authored path: `Game.Current`.
 - Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 33.
+- Covered by [Game](../design/compositions/Game.md), line 32.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -377,7 +729,7 @@ then
 
 Authored path: `Game.Current`.
 - Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 33.
+- Covered by [Game](../design/compositions/Game.md), line 32.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -393,7 +745,7 @@ then
 
 Authored path: `Game.Current`.
 - Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 33.
+- Covered by [Game](../design/compositions/Game.md), line 32.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -824,7 +1176,7 @@ then
 
 Authored path: `Rooms.Leave`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 31.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/leave", requestId, session)
@@ -836,7 +1188,7 @@ then
 
 Authored path: `Rooms.Leave`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 31.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Leave
@@ -848,7 +1200,7 @@ then
 
 Authored path: `Rooms.Leave`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 31.
 
 ```reaction
 when RoomJoining.leave (participant), asked by Rooms.Leave#2
@@ -862,10 +1214,11 @@ then
 
 Authored path: `Rooms.Leave`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 24.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 30.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 31.
 
 ```reaction
 when Sessioning.end (session, ended), asked by Rooms.Leave#3
+at the flow's settlement frontier
 where
   earlier, RequestBoundary.request (path: "/rooms/leave", requestId, session)
 then
@@ -879,6 +1232,9 @@ object or lacks a required key. The response uses `INVALID_INPUT` and names
 the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
+- `/annotations/clear` — requires `session`, `game`
+- `/annotations/highlight` — requires `session`, `game`, `coord`
+- `/annotations/remove` — requires `session`, `game`, `coord`
 - `/game/chord` — requires `session`, `game`, `coord`
 - `/game/current` — requires `session`
 - `/game/flag` — requires `session`, `game`, `coord`, `value`

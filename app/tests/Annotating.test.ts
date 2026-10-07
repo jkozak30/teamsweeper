@@ -184,3 +184,66 @@ test("simultaneous duplicate highlights across instances create exactly one anno
   expect(await testDb.db.collection("annotating.annotations")
     .countDocuments()).toBe(1);
 });
+
+test("compound items compare by value, including reordered object fields", async () => {
+  const item = {
+    game: "game-1",
+    coord: { row: 2, column: 3 },
+  };
+  const equivalent = {
+    coord: { column: 3, row: 2 },
+    game: "game-1",
+  };
+
+  await annotating.highlight({ user: "alice", item });
+
+  const restored = new AnnotatingConcept(testDb.db);
+
+  expect(await restored._forItem({ item: equivalent }))
+    .toEqual([{ author: "alice" }]);
+  expect(await restored._byUser({ user: "alice" }))
+    .toEqual([{ target: item }]);
+
+  await expect(restored.highlight({
+    user: "alice",
+    item: equivalent,
+  })).rejects.toBeInstanceOf(AlreadyHighlighted);
+
+  expect(await restored._forItem({
+    item: { ...item, game: "game-2" },
+  })).toEqual([]);
+
+  expect(await restored._forItem({
+    item: { ...item, coord: { row: 2, column: 4 } },
+  })).toEqual([]);
+
+  await restored.remove({ user: "alice", item: equivalent });
+
+  expect(await annotating._byUser({ user: "alice" })).toEqual([]);
+});
+
+test("simultaneous equivalent compound items create only one annotation", async () => {
+  const other = new AnnotatingConcept(testDb.db);
+
+  const results = await Promise.allSettled([
+    annotating.highlight({
+      user: "alice",
+      item: { game: "g", coord: { row: 0, column: 1 } },
+    }),
+    other.highlight({
+      user: "alice",
+      item: { coord: { column: 1, row: 0 }, game: "g" },
+    }),
+  ]);
+
+  expect(results.filter(result => result.status === "fulfilled"))
+    .toHaveLength(1);
+
+  const rejected = results.find(result => result.status === "rejected");
+  if (rejected?.status === "rejected") {
+    expect(rejected.reason).toBeInstanceOf(AlreadyHighlighted);
+  }
+
+  expect(await testDb.db.collection("annotating.annotations")
+    .countDocuments()).toBe(1);
+});

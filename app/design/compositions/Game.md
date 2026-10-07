@@ -25,9 +25,8 @@ Game.Chord at /game/chord
 
 An active member [reads the current game](reaction:Game.Current).
 The [snapshot former](former:Game.Snapshot) returns metadata, visible
-cells, and completed-game results. Hidden contents remain concealed
-during play; absent optional values become null. Before a game exists,
-game and snapshot are null.
+cells with their highlighters, and completed-game results. Before a game 
+exists, game and snapshot are null.
 
 ```endpoints
 Game.Current at /game/current

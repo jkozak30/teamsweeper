@@ -18,6 +18,9 @@ export const policy = httpPolicy({
     MOVE_NOT_ALLOWED: "CONFLICT",
     HOST_REQUIRED: "FORBIDDEN",
     GAME_NOT_CURRENT: "CONFLICT",
+    ALREADY_HIGHLIGHTED: "CONFLICT",
+    HIGHLIGHT_NOT_FOUND: "NOT_FOUND",
+    INVALID_COORDINATE: "INVALID_REQUEST",
   },
   cookies: {
     session: {

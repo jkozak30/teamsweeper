@@ -14,6 +14,7 @@ import {
   whether,
 } from "@mit-sdg/sync-engine/language";
 
+import { CellHighlights } from "./Annotations.ts";
 import { concepts } from "../concepts.ts";
 
 const { RoomJoining, Sessioning, MinesweeperPlaying } = concepts;
@@ -172,7 +173,8 @@ const Snapshot = former(
             }),
           ),
         )
-        .form({ coord, revealed, flagged, adjacent, mine, triggered }),
+        .form({ coord, revealed, flagged, adjacent, mine, triggered })
+        .splicing(CellHighlights({ game, coord })),
       results: each(
         MinesweeperPlaying._getResult({ game }).is({
           time,
