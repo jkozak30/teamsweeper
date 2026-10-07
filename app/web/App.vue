@@ -1,62 +1,114 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
+import Board from "./Board.vue";
 
 const api = createHttpClient<TeamsweeperWireHttp>({
   baseUrl: "/api",
 });
 
 type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
+type Game = TeamsweeperWireHttp["/game/current"]["output"];
+type Coordinate = TeamsweeperWireHttp["/game/reveal"]["input"]["coord"];
 
 const name = ref("");
 const code = ref("");
 const lobby = ref<Lobby | null>(null);
+const gameState = ref<Game | null>(null);
+const settings = ref({ height: 9, width: 9, mines: 10 });
 const status = ref("");
 const busy = ref(true);
 
-let refreshing = false;
+const isHost = computed(() =>
+  !!lobby.value &&
+  lobby.value.participant === lobby.value.host
+);
+
+const finished = computed(() =>
+  gameState.value?.snapshot?.status === "WON" ||
+  gameState.value?.snapshot?.status === "LOST"
+);
+
+let pending: Promise<void> | null = null;
 let timer: ReturnType<typeof setInterval> | undefined;
 let disposed = false;
 
-async function refreshLobby() {
-  if (refreshing) return;
-  refreshing = true;
+function clearRoom() {
+  lobby.value = null;
+  gameState.value = null;
+}
 
-  try {
-    const result = await api.rooms.current({});
+function report(error: string) {
+  const messages: Record<string, string> = {
+    INVALID_REQUEST: "Check your name, room code, or board settings.",
+    NOT_FOUND: "Room or game not found.",
+    FORBIDDEN: "You do not have permission to do that.",
+    CONFLICT: "That move is unavailable, or the current game has changed.",
+    UNAUTHORIZED: "Your session has expired. Please join again.",
+  };
+
+  status.value = messages[error] ?? `Request failed: ${error}`;
+  if (error === "UNAUTHORIZED") clearRoom();
+}
+
+// Share one refresh at a time. Actions wait for older polls to finish.
+function refreshState(): Promise<void> {
+  if (pending) return pending;
+
+  pending = (async () => {
+    const room = await api.rooms.current({});
     if (disposed) return;
 
-    if ("error" in result) {
+    if ("error" in room) {
       if (
-        result.error === "UNAUTHORIZED" ||
-        result.error === "FORBIDDEN" ||
-        result.error === "CONFLICT"
+        ["UNAUTHORIZED", "FORBIDDEN", "CONFLICT"].includes(room.error)
       ) {
         if (lobby.value) {
           status.value = "Your room session is no longer available.";
         }
-        lobby.value = null;
+        clearRoom();
       } else {
-        status.value = `Could not load room: ${result.error}`;
+        report(room.error);
       }
       return;
     }
 
-    lobby.value = result;
-  } finally {
-    refreshing = false;
-  }
+    lobby.value = room;
+
+    const game = await api.game.current({});
+    if (disposed) return;
+
+    if ("error" in game) {
+      gameState.value = null;
+      report(game.error);
+      return;
+    }
+
+    gameState.value = game;
+  })().finally(() => {
+    pending = null;
+  });
+
+  return pending;
 }
 
 async function run(operation: () => Promise<void>) {
+  if (busy.value || disposed) return;
+
   busy.value = true;
   status.value = "";
 
   try {
+    if (pending) await pending;
+    if (disposed) return;
+
     await operation();
+    if (!disposed) await refreshState();
   } catch {
-    status.value = "Could not reach the server. Please try again.";
+    if (!disposed) {
+      status.value = "Could not reach the server. Please try again.";
+    }
   } finally {
     busy.value = false;
   }
@@ -68,15 +120,8 @@ function createRoom() {
       name: name.value.trim(),
     });
 
-    if ("error" in result) {
-      status.value = `Could not create room: ${result.error}`;
-      return;
-    }
-
-    await refreshLobby();
-    if (lobby.value) {
-      status.value = "Room created. Share the code with another player.";
-    }
+    if ("error" in result) return report(result.error);
+    status.value = "Room created. Share the code with another player.";
   });
 }
 
@@ -87,15 +132,8 @@ function joinRoom() {
       code: code.value.trim().toUpperCase(),
     });
 
-    if ("error" in result) {
-      status.value = result.error === "NOT_FOUND"
-        ? "Room not found or closed. Check the code."
-        : `Could not join room: ${result.error}`;
-      return;
-    }
-
-    await refreshLobby();
-    if (lobby.value) status.value = "Joined the room.";
+    if ("error" in result) return report(result.error);
+    status.value = "Joined the room.";
   });
 }
 
@@ -104,12 +142,43 @@ function leaveRoom() {
     const result = await api.rooms.leave({});
 
     if ("error" in result && result.error !== "UNAUTHORIZED") {
-      status.value = `Could not leave room: ${result.error}`;
-      return;
+      return report(result.error);
     }
 
-    lobby.value = null;
-    status.value = "You are no longer signed in to the room.";
+    clearRoom();
+    status.value = "You have left the room.";
+  });
+}
+
+function startGame() {
+  return run(async () => {
+    if (!lobby.value || !isHost.value) return;
+
+    const result = await api.game.start({
+      room: lobby.value.room,
+      settings: { ...settings.value },
+    });
+
+    if ("error" in result) report(result.error);
+  });
+}
+
+function move(
+  kind: "reveal" | "flag" | "chord",
+  coord: Coordinate,
+  value = false,
+) {
+  const game = gameState.value?.game;
+  if (!game || finished.value) return;
+
+  return run(async () => {
+    const result = kind === "flag"
+      ? await api.game.flag({ game, coord, value })
+      : kind === "reveal"
+      ? await api.game.reveal({ game, coord })
+      : await api.game.chord({ game, coord });
+
+    if ("error" in result) report(result.error);
   });
 }
 
@@ -125,18 +194,25 @@ async function copyCode() {
 }
 
 onMounted(async () => {
-  await run(refreshLobby);
+  try {
+    await refreshState();
+  } catch {
+    status.value = "Could not reach the server. Please reload to try again.";
+  } finally {
+    busy.value = false;
+  }
+
   if (disposed) return;
 
   timer = setInterval(() => {
     if (lobby.value && !busy.value) {
-      void refreshLobby().catch(() => {
+      void refreshState().catch(() => {
         if (!disposed) {
-          status.value = "Could not update room. Retrying automatically.";
+          status.value = "Could not update the room. Retrying automatically.";
         }
       });
     }
-  }, 2000);
+  }, 500);
 });
 
 onUnmounted(() => {
@@ -191,6 +267,95 @@ onUnmounted(() => {
           <span v-if="player.participant === lobby.host">(host)</span>
         </li>
       </ul>
+
+      <form v-if="isHost" @submit.prevent="startGame">
+        <fieldset :disabled="busy">
+          <legend>Board settings</legend>
+
+          <label>
+            Height
+            <input
+              v-model.number="settings.height"
+              type="number"
+              min="1"
+              step="1"
+              required
+            />
+          </label>
+          <label>
+            Width
+            <input
+              v-model.number="settings.width"
+              type="number"
+              min="1"
+              step="1"
+              required
+            />
+          </label>
+          <label>
+            Mines
+            <input
+              v-model.number="settings.mines"
+              type="number"
+              min="1"
+              :max="settings.height * settings.width - 1"
+              step="1"
+              required
+            />
+          </label>
+
+          <button>
+            {{ gameState?.game ? 'Start new game' : 'Start game' }}
+          </button>
+        </fieldset>
+      </form>
+      <p v-else>The host can start a game.</p>
+
+      <section v-if="gameState?.snapshot">
+        <h2>Game: {{ gameState.snapshot.status }}</h2>
+        <p>
+          Flags remaining: {{ gameState.snapshot.flagsRemaining }}
+          · Moves: {{ gameState.snapshot.clicks }}
+        </p>
+        <p>
+          Click to reveal. Right-click or Shift-click to flag.
+          Click a revealed number to chord.
+        </p>
+
+        <Board
+          :width="gameState.snapshot.settings.width"
+          :cells="gameState.snapshot.cells"
+          :disabled="busy || finished"
+          @reveal="move('reveal', $event)"
+          @flag="(coord, value) => move('flag', coord, value)"
+          @chord="move('chord', $event)"
+        />
+
+        <section v-if="gameState.snapshot.results[0]">
+          <h3>Results</h3>
+          <dl>
+            <dt>Time</dt>
+            <dd>
+              {{ gameState.snapshot.results[0].time.toFixed(2) }} seconds
+            </dd>
+            <dt>3BV</dt>
+            <dd>{{ gameState.snapshot.results[0].bv }}</dd>
+            <dt>Moves</dt>
+            <dd>{{ gameState.snapshot.results[0].clicks }}</dd>
+            <dt>Speed</dt>
+            <dd>
+              {{ gameState.snapshot.results[0].speed.toFixed(2) }}
+              3BV units/second
+            </dd>
+            <dt>Efficiency</dt>
+            <dd>
+              {{ gameState.snapshot.results[0].efficiency.toFixed(2) }}
+              3BV units/move
+            </dd>
+          </dl>
+        </section>
+      </section>
+      <p v-else>No game has started yet.</p>
 
       <button :disabled="busy" @click="leaveRoom">Leave room</button>
     </section>
