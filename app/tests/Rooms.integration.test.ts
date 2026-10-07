@@ -8,6 +8,7 @@ import { composition } from "../src/compositions/Rooms.ts";
 import { RoomJoiningConcept } from "../src/concepts/RoomJoining.ts";
 import { SessioningConcept } from "../src/concepts/Sessioning.ts";
 import { MinesweeperPlayingConcept } from "../src/concepts/MinesweeperPlaying.ts";
+import { AnnotatingConcept } from "../src/concepts/Annotating.ts";
 import { policy } from "../src/http.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
@@ -33,6 +34,7 @@ beforeEach(async () => {
       MinesweeperPlaying: new MinesweeperPlayingConcept(testDb.db),
       RoomJoining: rooms,
       Sessioning: new SessioningConcept(testDb.db, () => now),
+      Annotating: new AnnotatingConcept(testDb.db),
     },
     composition: { Rooms: composition },
   });

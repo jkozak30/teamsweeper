@@ -6,6 +6,7 @@ import {
 import roomSpec from "@design/concepts/RoomJoining.md" with { type: "text" };
 import sessionSpec from "@design/concepts/Sessioning.md" with { type: "text" };
 import playingSpec from "@design/concepts/MinesweeperPlaying.md" with { type: "text" };
+import annotatingSpec from "@design/concepts/Annotating.md" with { type: "text" };
 
 import {
   RoomJoiningConcept,
@@ -29,6 +30,12 @@ import {
   GameNotFound,
   MoveNotAllowed,
 } from "./concepts/MinesweeperPlaying.ts";
+
+import {
+  AnnotatingConcept,
+  AlreadyHighlighted,
+  HighlightNotFound,
+} from "./concepts/Annotating.ts";
 
 const roomJoining = registerConcept({
   class: RoomJoiningConcept,
@@ -62,10 +69,20 @@ const minesweeperPlaying = registerConcept({
   },
 });
 
+const annotating = registerConcept({
+  class: AnnotatingConcept,
+  spec: annotatingSpec,
+  refusals: {
+    ALREADY_HIGHLIGHTED: AlreadyHighlighted,
+    HIGHLIGHT_NOT_FOUND: HighlightNotFound,
+  },
+});
+
 export const applicationConceptSet = conceptSet({
   MinesweeperPlaying: minesweeperPlaying,
   RoomJoining: roomJoining,
   Sessioning: sessioning,
+  Annotating: annotating,
 });
 
 export const { concepts } = applicationConceptSet;

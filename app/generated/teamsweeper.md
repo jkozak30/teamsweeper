@@ -8,6 +8,29 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
+### Annotating
+
+Defined in [Annotating](../design/concepts/Annotating.md), line 1.
+
+#### Actions
+
+- `highlight(user: User, item: Item) : returns ()`
+  - Refuses `ALREADY_HIGHLIGHTED`: You have already highlighted that item.
+- `remove(user: User, item: Item) : returns ()`
+  - Refuses `HIGHLIGHT_NOT_FOUND`: You have not highlighted that item.
+- `clear(user: User) : returns ()`
+
+#### Queries
+
+- `_forItem(item: Item) : many (author: User)`
+- `_byUser(user: User) : many (target: Item)`
+
+#### Instances
+
+- `Annotating` — instance of `Annotating` — [Application types](../design/types.md), line 21.
+  - `Item` is `GameCell` — [Application types](../design/types.md), line 23.
+  - `User` is `RoomJoining.Participant` — [Application types](../design/types.md), line 22.
+
 ### MinesweeperPlaying
 
 Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 1.
@@ -34,7 +57,7 @@ Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 
 
 #### Instances
 
-- `MinesweeperPlaying` — instance of `MinesweeperPlaying` — [Application types](../design/types.md), line 7.
+- `MinesweeperPlaying` — instance of `MinesweeperPlaying` — [Application types](../design/types.md), line 13.
 
 ### RoomJoining
 
@@ -61,8 +84,8 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
 
 #### Instances
 
-- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 9.
-  - `Game` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 10.
+- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 15.
+  - `Game` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 16.
 
 ### Sessioning
 
@@ -82,8 +105,14 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Instances
 
-- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 12.
-  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 13.
+- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 18.
+  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 19.
+
+## Application types
+
+Concrete types:
+
+- `GameCell` — [Application types](../design/types.md), line 7.
 
 ## Views
 

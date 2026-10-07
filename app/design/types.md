@@ -1,7 +1,13 @@
 # Application types
 
-Teamsweeper associates rooms with Minesweeper games.
-A session identifies a room participant.
+Rooms contain Minesweeper games, sessions identify participants,
+and participants highlight cells identified by game and coordinate.
+
+```types
+concrete GameCell
+  A string encoding [game, row, column] with JSON.stringify,
+  identifying one cell in one MinesweeperPlaying game.
+```
 
 ```instances
 instantiate MinesweeperPlaying
@@ -11,4 +17,8 @@ instantiate RoomJoining with
 
 instantiate Sessioning with
   Subject is RoomJoining.Participant
+
+instantiate Annotating with
+  User is RoomJoining.Participant
+  Item is GameCell
 ```
