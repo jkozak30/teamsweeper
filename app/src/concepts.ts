@@ -3,7 +3,9 @@ import {
   registerConcept,
 } from "@mit-sdg/sync-engine/assembly";
 
-import spec from "@design/concepts/RoomJoining.md" with { type: "text" };
+import roomSpec from "@design/concepts/RoomJoining.md" with { type: "text" };
+import sessionSpec from "@design/concepts/Sessioning.md" with { type: "text" };
+import playingSpec from "@design/concepts/MinesweeperPlaying.md" with { type: "text" };
 
 import {
   RoomJoiningConcept,
@@ -15,16 +17,22 @@ import {
   GameAlreadyAssociated,
 } from "./concepts/RoomJoining.ts";
 
-import sessionSpec from "@design/concepts/Sessioning.md" with { type: "text" };
 import {
   SessioningConcept,
   UnknownSession,
   EndSessionNotActive,
 } from "./concepts/Sessioning.ts";
 
+import {
+  MinesweeperPlayingConcept,
+  InvalidSettings,
+  GameNotFound,
+  MoveNotAllowed,
+} from "./concepts/MinesweeperPlaying.ts";
+
 const roomJoining = registerConcept({
   class: RoomJoiningConcept,
-  spec,
+  spec: roomSpec,
   refusals: {
     CREATE_NAME_REQUIRED: CreateNameRequired,
     JOIN_NAME_REQUIRED: JoinNameRequired,
@@ -44,7 +52,18 @@ const sessioning = registerConcept({
   },
 });
 
+const minesweeperPlaying = registerConcept({
+  class: MinesweeperPlayingConcept,
+  spec: playingSpec,
+  refusals: {
+    INVALID_SETTINGS: InvalidSettings,
+    GAME_NOT_FOUND: GameNotFound,
+    MOVE_NOT_ALLOWED: MoveNotAllowed,
+  },
+});
+
 export const applicationConceptSet = conceptSet({
+  MinesweeperPlaying: minesweeperPlaying,
   RoomJoining: roomJoining,
   Sessioning: sessioning,
 });

@@ -7,6 +7,7 @@ import { applicationConceptSet } from "../src/concepts.ts";
 import { composition } from "../src/compositions/Rooms.ts";
 import { RoomJoiningConcept } from "../src/concepts/RoomJoining.ts";
 import { SessioningConcept } from "../src/concepts/Sessioning.ts";
+import { MinesweeperPlayingConcept } from "../src/concepts/MinesweeperPlaying.ts";
 import { policy } from "../src/http.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
@@ -23,12 +24,13 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await testDb.db.dropDatabase();
-  now = new Date("2026-10-07T12:00:00Z");
+  now = new Date();
   rooms = new RoomJoiningConcept(testDb.db);
 
   const application = assemble({
     conceptSet: applicationConceptSet,
     instances: {
+      MinesweeperPlaying: new MinesweeperPlayingConcept(testDb.db),
       RoomJoining: rooms,
       Sessioning: new SessioningConcept(testDb.db, () => now),
     },

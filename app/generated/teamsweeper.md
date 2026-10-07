@@ -8,6 +8,34 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
+### MinesweeperPlaying
+
+Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 1.
+
+#### Actions
+
+- `create(settings: Settings) : returns (game: Game)`
+  - Refuses `INVALID_SETTINGS`: Use positive safe integer dimensions and fewer mines than cells.
+- `reveal(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)`
+  - Refuses `GAME_NOT_FOUND`: That game does not exist.
+  - Refuses `MOVE_NOT_ALLOWED`: That move is not allowed in the current game state.
+- `flag(game: Game, coord: Coordinate, value: Flag) : returns ()`
+  - Refuses `GAME_NOT_FOUND`: That game does not exist.
+  - Refuses `MOVE_NOT_ALLOWED`: That move is not allowed in the current game state.
+- `chord(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)`
+  - Refuses `GAME_NOT_FOUND`: That game does not exist.
+  - Refuses `MOVE_NOT_ALLOWED`: That move is not allowed in the current game state.
+
+#### Queries
+
+- `_getGame(game: Game) : optional (settings: Settings, status: Status, clicks: Number, flagsRemaining: Number, startedAt?: DateTime, endedAt?: DateTime)`
+- `_visibleCells(game: Game) : many (coord: Coordinate, revealed: Flag, flagged: Flag, adjacent?: Number, mine?: Flag, triggered?: Flag)`
+- `_getResult(game: Game) : optional (time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number)`
+
+#### Instances
+
+- `MinesweeperPlaying` — instance of `MinesweeperPlaying` — [Application types](../design/types.md), line 7.
+
 ### RoomJoining
 
 Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
@@ -33,8 +61,8 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
 
 #### Instances
 
-- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 12.
-  - `Game` is `GameIdentity` — [Application types](../design/types.md), line 13.
+- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 9.
+  - `Game` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 10.
 
 ### Sessioning
 
@@ -54,14 +82,8 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Instances
 
-- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 14.
-  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 15.
-
-## Application types
-
-Concrete types:
-
-- `GameIdentity` — [Application types](../design/types.md), line 7.
+- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 12.
+  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 13.
 
 ## Views
 

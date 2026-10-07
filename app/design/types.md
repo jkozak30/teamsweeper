@@ -1,16 +1,14 @@
 # Application types
 
-RoomJoining currently treats game identities as opaque strings.
-The gameplay concept will be introduced in a later implementation step.
-
-```types
-concrete GameIdentity
-  An identifier for a game associated with a room.
-```
+Teamsweeper associates rooms with Minesweeper games.
+A session identifies a room participant.
 
 ```instances
+instantiate MinesweeperPlaying
+
 instantiate RoomJoining with
-  Game is GameIdentity
+  Game is MinesweeperPlaying.Game
+
 instantiate Sessioning with
   Subject is RoomJoining.Participant
 ```
