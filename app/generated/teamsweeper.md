@@ -36,6 +36,27 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
 - `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 12.
   - `Game` is `GameIdentity` — [Application types](../design/types.md), line 13.
 
+### Sessioning
+
+Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
+
+#### Actions
+
+- `start(subject: Subject) : returns (session: Session, expiresAt: DateTime)`
+- `current(session: Session) : returns (subject: Subject)`
+  - Refuses `UNKNOWN_SESSION`: This session is not active.
+- `end(session: Session) : returns (ended: Flag)`
+  - Refuses `END_SESSION_NOT_ACTIVE`: This session is not active.
+
+#### Queries
+
+- `_active(session: Session) : optional (subject: Subject, expiresAt: DateTime)`
+
+#### Instances
+
+- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 14.
+  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 15.
+
 ## Application types
 
 Concrete types:
@@ -67,8 +88,8 @@ then
 ### Rooms.Create
 
 Authored path: `Rooms.Create`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 3.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 15.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
 
 ```reaction
 when RequestBoundary.request (name, path: "/rooms/create", requestId)
@@ -79,22 +100,61 @@ then
 ### Rooms.Create#2
 
 Authored path: `Rooms.Create`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 3.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 15.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
 
 ```reaction
 when RoomJoining.create (name, code, participant, room), asked by Rooms.Create
+then
+  Sessioning.start (subject: participant)
+```
+
+### Rooms.Create#3
+
+Authored path: `Rooms.Create`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 5.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
+
+```reaction
+when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Create#2
 where
+  earlier, RoomJoining.create (name, code, participant, room), asked by Rooms.Create
   earlier, RequestBoundary.request (name, path: "/rooms/create", requestId)
 then
-  RequestBoundary.respond (code, participant, requestId, room)
+  RequestBoundary.respond (code, expiresAt, participant, requestId, room, session)
+```
+
+### Rooms.Current
+
+Authored path: `Rooms.Current`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 33.
+
+```reaction
+when RequestBoundary.request (path: "/rooms/current", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Rooms.Current#2
+
+Authored path: `Rooms.Current`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 33.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rooms.Current
+where
+  earlier, RequestBoundary.request (path: "/rooms/current", requestId, session)
+then
+  RequestBoundary.respond (participant, requestId)
 ```
 
 ### Rooms.Join
 
 Authored path: `Rooms.Join`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 7.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 16.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when RequestBoundary.request (code, name, path: "/rooms/join", requestId)
@@ -105,15 +165,79 @@ then
 ### Rooms.Join#2
 
 Authored path: `Rooms.Join`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 7.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 16.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when RoomJoining.join (code, name, participant), asked by Rooms.Join
+then
+  Sessioning.start (subject: participant)
+```
+
+### Rooms.Join#3
+
+Authored path: `Rooms.Join`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
+
+```reaction
+when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Join#2
 where
   earlier, RequestBoundary.request (code, name, path: "/rooms/join", requestId)
 then
-  RequestBoundary.respond (participant, requestId)
+  RequestBoundary.respond (expiresAt, participant, requestId, session)
+```
+
+### Rooms.Leave
+
+Authored path: `Rooms.Leave`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 38.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+
+```reaction
+when RequestBoundary.request (path: "/rooms/leave", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Rooms.Leave#2
+
+Authored path: `Rooms.Leave`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 38.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rooms.Leave
+then
+  RoomJoining.leave (participant)
+```
+
+### Rooms.Leave#3
+
+Authored path: `Rooms.Leave`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 38.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+
+```reaction
+when RoomJoining.leave (participant), asked by Rooms.Leave#2
+where
+  earlier, Sessioning.current (session, subject: participant), asked by Rooms.Leave
+then
+  Sessioning.end (session)
+```
+
+### Rooms.Leave#4
+
+Authored path: `Rooms.Leave`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 38.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+
+```reaction
+when Sessioning.end (session, ended), asked by Rooms.Leave#3
+where
+  earlier, RequestBoundary.request (path: "/rooms/leave", requestId, session)
+then
+  RequestBoundary.respond (ended, requestId)
 ```
 
 ## Endpoint input contracts
@@ -124,4 +248,6 @@ the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
 - `/rooms/create` — requires `name`
+- `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`
+- `/rooms/leave` — requires `session`

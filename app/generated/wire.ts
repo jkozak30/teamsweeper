@@ -4,6 +4,8 @@
 import type { applicationConceptSet as ApplicationConceptSet } from "../src/concepts.ts";
 
 type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : H extends `${number}` ? T extends readonly (infer Item)[] ? AtPath<Item, R> : never : never : T;
+type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;
+type OneOf<T extends readonly unknown[]> = T[number];
 type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -17,10 +19,21 @@ export type TeamsweeperWire = {
     };
     output: {
       "code": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["code"]>>;
-      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["participant"]>>;
+      "expiresAt": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["expiresAt"]>>;
+      "participant": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>[0], ["subject"]>, AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["participant"]>]>>;
       "room": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["room"]>>;
+      "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["session"]>>;
     };
     error: { error: AppWideError | "CREATE_NAME_REQUIRED" | "INVALID_INPUT" };
+  };
+  "/rooms/current": {
+    input: {
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: {
+      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>>, ["subject"]>>;
+    };
+    error: { error: AppWideError | "INVALID_INPUT" | "UNKNOWN_SESSION" };
   };
   "/rooms/join": {
     input: {
@@ -28,9 +41,20 @@ export type TeamsweeperWire = {
       "name": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["join"]>[0], ["name"]>>;
     };
     output: {
-      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["join"]>>, ["participant"]>>;
+      "expiresAt": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["expiresAt"]>>;
+      "participant": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>[0], ["subject"]>>;
+      "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["session"]>>;
     };
     error: { error: AppWideError | "INVALID_INPUT" | "JOIN_NAME_REQUIRED" | "ROOM_UNAVAILABLE" };
+  };
+  "/rooms/leave": {
+    input: {
+      "session": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["end"]>[0], ["session"]>]>>;
+    };
+    output: {
+      "ended": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["end"]>>, ["ended"]>>;
+    };
+    error: { error: AppWideError | "END_SESSION_NOT_ACTIVE" | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "UNKNOWN_SESSION" };
   };
 };
 
@@ -43,10 +67,17 @@ export type TeamsweeperWireHttp = {
     };
     output: {
       "code": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["code"]>>;
-      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["participant"]>>;
+      "participant": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>[0], ["subject"]>, AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["participant"]>]>>;
       "room": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["room"]>>;
     };
     error: { error: HttpAppWideError | "INVALID_REQUEST" };
+  };
+  "/rooms/current": {
+    input: Record<string, never>;
+    output: {
+      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>>, ["subject"]>>;
+    };
+    error: { error: HttpAppWideError | "INVALID_REQUEST" | "UNAUTHORIZED" };
   };
   "/rooms/join": {
     input: {
@@ -54,8 +85,15 @@ export type TeamsweeperWireHttp = {
       "name": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["join"]>[0], ["name"]>>;
     };
     output: {
-      "participant": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["join"]>>, ["participant"]>>;
+      "participant": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>[0], ["subject"]>>;
     };
     error: { error: HttpAppWideError | "INVALID_REQUEST" | "NOT_FOUND" };
+  };
+  "/rooms/leave": {
+    input: Record<string, never>;
+    output: {
+      "ended": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["end"]>>, ["ended"]>>;
+    };
+    error: { error: HttpAppWideError | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };
   };
 };

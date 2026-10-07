@@ -11,4 +11,6 @@ concrete GameIdentity
 ```instances
 instantiate RoomJoining with
   Game is GameIdentity
+instantiate Sessioning with
+  Subject is RoomJoining.Participant
 ```

@@ -15,6 +15,13 @@ import {
   GameAlreadyAssociated,
 } from "./concepts/RoomJoining.ts";
 
+import sessionSpec from "@design/concepts/Sessioning.md" with { type: "text" };
+import {
+  SessioningConcept,
+  UnknownSession,
+  EndSessionNotActive,
+} from "./concepts/Sessioning.ts";
+
 const roomJoining = registerConcept({
   class: RoomJoiningConcept,
   spec,
@@ -28,8 +35,18 @@ const roomJoining = registerConcept({
   },
 });
 
+const sessioning = registerConcept({
+  class: SessioningConcept,
+  spec: sessionSpec,
+  refusals: {
+    UNKNOWN_SESSION: UnknownSession,
+    END_SESSION_NOT_ACTIVE: EndSessionNotActive,
+  },
+});
+
 export const applicationConceptSet = conceptSet({
   RoomJoining: roomJoining,
+  Sessioning: sessioning,
 });
 
 export const { concepts } = applicationConceptSet;
