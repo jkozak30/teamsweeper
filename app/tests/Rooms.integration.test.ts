@@ -105,9 +105,9 @@ test("Create and Join issue private cookies identifying distinct participants", 
   const aliceCurrent = await post("current", {}, aliceCookie);
   const bobCurrent = await post("current", {}, bobCookie);
   expect(aliceCurrent.response.status).toBe(200);
-  expect(aliceCurrent.data).toEqual({ participant: aliceId });
+  expect(aliceCurrent.data).toMatchObject({ participant: aliceId });
   expect(bobCurrent.response.status).toBe(200);
-  expect(bobCurrent.data).toEqual({ participant: bobId });
+  expect(bobCurrent.data).toMatchObject({ participant: bobId });
 
   expect(await rooms._getParticipant({ participant: bobId }))
     .toEqual([{ room, name: "Bob", active: true }]);
@@ -177,7 +177,7 @@ test("JSON claims cannot override cookie identity or select another participant"
     aliceCookie,
   );
   expect(spoofedSession.response.status).toBe(200);
-  expect(spoofedSession.data).toEqual({ participant: aliceId });
+  expect(spoofedSession.data).toMatchObject({ participant: aliceId });
 
   const noCookie = await post("current", { session: bobToken });
   expect(noCookie.response.status).toBe(401);
@@ -273,4 +273,73 @@ test("an incorrect Origin cannot use a session to leave", async () => {
   expect(rejected.response.status).toBe(403);
   expect((await rooms._getParticipant({ participant }))[0]!.active)
     .toBe(true);
+});
+
+test("Current restores lobby details and reflects joins and host departure", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const room = stringField(alice.data, "room");
+  const code = stringField(alice.data, "code");
+  const aliceId = stringField(alice.data, "participant");
+  const aliceCookie = sessionCookie(alice.response);
+
+  const initial = await post("current", {}, aliceCookie);
+  expect(initial.response.status).toBe(200);
+  expect(initial.data).toEqual({
+    participant: aliceId,
+    room,
+    code,
+    host: aliceId,
+    members: {
+      participants: [{ participant: aliceId, name: "Alice" }],
+    },
+  });
+
+  const bob = await post("join", { code, name: "Bob" });
+  const bobId = stringField(bob.data, "participant");
+  const bobCookie = sessionCookie(bob.response);
+
+  const joined = await post("current", {}, aliceCookie);
+  expect(joined.response.status).toBe(200);
+  expect(joined.data).toMatchObject({
+    room,
+    code,
+    host: aliceId,
+    members: {
+      participants: expect.arrayContaining([
+        { participant: aliceId, name: "Alice" },
+        { participant: bobId, name: "Bob" },
+      ]),
+    },
+  });
+
+  await post("leave", {}, aliceCookie);
+
+  const remaining = await post("current", {}, bobCookie);
+  expect(remaining.response.status).toBe(200);
+  expect(remaining.data).toEqual({
+    participant: bobId,
+    room,
+    code,
+    host: bobId,
+    members: {
+      participants: [{ participant: bobId, name: "Bob" }],
+    },
+  });
+});
+
+test("Current rejects inactive membership even with an active session", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const participant = stringField(alice.data, "participant");
+
+  // End membership directly, leaving the session active.
+  await rooms.leave({ participant });
+
+  const result = await post(
+    "current",
+    {},
+    sessionCookie(alice.response),
+  );
+
+  expect(result.response.status).toBe(403);
+  expect(result.data).toEqual({ error: "FORBIDDEN" });
 });

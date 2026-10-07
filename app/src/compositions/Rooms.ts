@@ -4,6 +4,7 @@ import {
   respond,
   type EndpointValidator,
 } from "@mit-sdg/sync-engine/boundary";
+import { each, form, former, no, where } from "@mit-sdg/sync-engine/language";
 
 import { concepts } from "../concepts.ts";
 
@@ -81,14 +82,66 @@ const Join = endpoint(
   },
 );
 
+const Members = former(
+  "the active room participants",
+  ({ room }, { participant, name }) =>
+    form({
+      participants: each(
+        RoomJoining._activeParticipants({ room }).is({ participant, name }),
+      ).form({ participant, name }),
+    }),
+);
+
 const Current = endpoint(
   "/rooms/current",
-  ({ session, participant }) =>
+  ({ session, participant, room, code, host }) =>
     receive({ session })
       .then(Sessioning.current({ session }).responds({
         subject: participant,
       }))
-      .then(respond({ participant })),
+      .then(
+        where(
+          RoomJoining._getParticipant({ participant }).is({
+            room,
+            active: true,
+          }),
+          RoomJoining._getRoom({ room }).is({
+            code,
+            status: "OPEN",
+            host,
+          }),
+        )
+          .then(respond({
+            participant,
+            room,
+            code,
+            host,
+            members: Members({ room }),
+          }))
+          .named("room-open"),
+
+        where(
+          RoomJoining._getParticipant({ participant }).is({
+            room,
+            active: true,
+          }),
+          no(
+            RoomJoining._getRoom({ room }).is({
+              status: "OPEN",
+            }),
+          ),
+        )
+          .then(respond({ error: "ROOM_NOT_OPEN" }))
+          .named("room-unavailable"),
+
+        where(no(
+          RoomJoining._getParticipant({ participant }).is({
+            active: true,
+          }),
+        ))
+          .then(respond({ error: "PARTICIPANT_NOT_ACTIVE" }))
+          .named("participant-inactive"),
+      ),
   {
     input: { required: ["session"] },
     validators: { input: sessionInput },
@@ -114,6 +167,7 @@ const Leave = endpoint(
 export const composition = {
   Create,
   Join,
+  Members,
   Current,
   Leave,
 };

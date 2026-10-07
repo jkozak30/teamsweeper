@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
 
@@ -7,12 +7,47 @@ const api = createHttpClient<TeamsweeperWireHttp>({
   baseUrl: "/api",
 });
 
+type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
+
 const name = ref("");
 const code = ref("");
-const participant = ref<string | null>(null);
-const roomCode = ref("");
+const lobby = ref<Lobby | null>(null);
 const status = ref("");
 const busy = ref(true);
+
+let refreshing = false;
+let timer: ReturnType<typeof setInterval> | undefined;
+let disposed = false;
+
+async function refreshLobby() {
+  if (refreshing) return;
+  refreshing = true;
+
+  try {
+    const result = await api.rooms.current({});
+    if (disposed) return;
+
+    if ("error" in result) {
+      if (
+        result.error === "UNAUTHORIZED" ||
+        result.error === "FORBIDDEN" ||
+        result.error === "CONFLICT"
+      ) {
+        if (lobby.value) {
+          status.value = "Your room session is no longer available.";
+        }
+        lobby.value = null;
+      } else {
+        status.value = `Could not load room: ${result.error}`;
+      }
+      return;
+    }
+
+    lobby.value = result;
+  } finally {
+    refreshing = false;
+  }
+}
 
 async function run(operation: () => Promise<void>) {
   busy.value = true;
@@ -38,18 +73,18 @@ function createRoom() {
       return;
     }
 
-    participant.value = result.participant;
-    roomCode.value = result.code;
-    status.value = "Room created. Share the code with another player.";
+    await refreshLobby();
+    if (lobby.value) {
+      status.value = "Room created. Share the code with another player.";
+    }
   });
 }
 
 function joinRoom() {
   return run(async () => {
-    const enteredCode = code.value.trim().toUpperCase();
     const result = await api.rooms.join({
       name: name.value.trim(),
-      code: enteredCode,
+      code: code.value.trim().toUpperCase(),
     });
 
     if ("error" in result) {
@@ -59,9 +94,8 @@ function joinRoom() {
       return;
     }
 
-    participant.value = result.participant;
-    roomCode.value = enteredCode;
-    status.value = "Joined the room.";
+    await refreshLobby();
+    if (lobby.value) status.value = "Joined the room.";
   });
 }
 
@@ -74,35 +108,40 @@ function leaveRoom() {
       return;
     }
 
-    participant.value = null;
-    roomCode.value = "";
+    lobby.value = null;
     status.value = "You are no longer signed in to the room.";
   });
 }
 
 async function copyCode() {
+  if (!lobby.value) return;
+
   try {
-    await navigator.clipboard.writeText(roomCode.value);
+    await navigator.clipboard.writeText(lobby.value.code);
     status.value = "Code copied.";
   } catch {
     status.value = "Could not copy. Select and copy the code manually.";
   }
 }
 
-onMounted(() => {
-  void run(async () => {
-    const result = await api.rooms.current({});
+onMounted(async () => {
+  await run(refreshLobby);
+  if (disposed) return;
 
-    if ("error" in result) {
-      if (result.error !== "UNAUTHORIZED") {
-        status.value = `Could not restore session: ${result.error}`;
-      }
-      return;
+  timer = setInterval(() => {
+    if (lobby.value && !busy.value) {
+      void refreshLobby().catch(() => {
+        if (!disposed) {
+          status.value = "Could not update room. Retrying automatically.";
+        }
+      });
     }
+  }, 2000);
+});
 
-    participant.value = result.participant;
-    status.value = "Session restored.";
-  });
+onUnmounted(() => {
+  disposed = true;
+  if (timer !== undefined) clearInterval(timer);
 });
 </script>
 
@@ -110,7 +149,7 @@ onMounted(() => {
   <main>
     <h1>Teamsweeper</h1>
 
-    <fieldset v-if="!participant" :disabled="busy">
+    <fieldset v-if="!lobby" :disabled="busy">
       <legend>Enter a room</legend>
 
       <label>
@@ -136,13 +175,22 @@ onMounted(() => {
     <section v-else>
       <h2>Room</h2>
 
-      <p v-if="roomCode">
-        Code: <strong>{{ roomCode }}</strong>
+      <p>
+        Code: <strong>{{ lobby.code }}</strong>
         <button :disabled="busy" @click="copyCode">Copy code</button>
       </p>
-      <p v-else>
-        Your session was restored. Room details are not available yet.
-      </p>
+
+      <h3>Players</h3>
+      <ul>
+        <li
+          v-for="player in lobby.members.participants"
+          :key="player.participant"
+        >
+          {{ player.name }}
+          <span v-if="player.participant === lobby.participant">(you)</span>
+          <span v-if="player.participant === lobby.host">(host)</span>
+        </li>
+      </ul>
 
       <button :disabled="busy" @click="leaveRoom">Leave room</button>
     </section>

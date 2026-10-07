@@ -19,15 +19,20 @@ Rooms.Create at /rooms/create
 Rooms.Join at /rooms/join
 ```
 
-## Resolving identity
+## Reading the current lobby
 
-A requester [resolves their current participant](reaction:Rooms.Current).
+A requester [reads their current lobby](reaction:Rooms.Current).
 The HTTP adapter supplies the session from its cookie, and
 Sessioning.current resolves it to the participant identity.
-Unknown, ended, or expired sessions produce an unauthorized response.
 
-This establishes identity only. Room-dependent operations must also
-check that the participant is active in the appropriate open room.
+The endpoint checks that the participant is active and their room
+is open. It returns the participant identity, room identity, code,
+host, and [active room participants](former:Rooms.Members).
+The former lists each active participant's identity and display name.
+
+Unknown, ended, or expired sessions produce an unauthorized response.
+Inactive participants produce a forbidden response, and a room that
+is missing or closed produces a conflict response.
 
 ```endpoints
 Rooms.Current at /rooms/current
@@ -57,4 +62,4 @@ Create and Join establish a new browser session. Until an explicit
 room-switching workflow exists, the frontend should offer these actions
 only when the browser has no current participant.
 
-Lobby reads and annotation cleanup on departure remain future work.
+Annotation cleanup on departure remains future work.
