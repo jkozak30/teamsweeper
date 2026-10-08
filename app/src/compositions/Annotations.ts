@@ -1,19 +1,5 @@
-import {
-  endpoint,
-  receive,
-  respond,
-  type EndpointValidator,
-} from "@mit-sdg/sync-engine/boundary";
-import {
-  compute,
-  each,
-  former,
-  no,
-  reaction,
-  view,
-  when,
-  where,
-} from "@mit-sdg/sync-engine/language";
+import { endpoint, receive, respond, type EndpointValidator } from "@mit-sdg/sync-engine/boundary";
+import { compute, each, former, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts, computations } from "../concepts.ts";
 import { composition as Rooms } from "./Rooms.ts";
 
@@ -22,18 +8,12 @@ const { ActiveLobby } = Rooms;
 
 function input(kind: "highlight" | "remove" | "clear"): EndpointValidator {
   return value => {
-    if (
-      typeof value !== "object" ||
-      value === null ||
-      Array.isArray(value)
-    ) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
       return { ok: false, detail: "Expected annotation request fields." };
     }
 
     const body = value as Record<string, unknown>;
-    const keys = kind === "clear"
-      ? ["session", "game"]
-      : ["session", "game", "coord"];
+    const keys = kind === "clear" ? ["session", "game"] : ["session", "game", "coord"];
     const coord = body.coord as Record<string, unknown> | null;
 
     const valid =
@@ -79,8 +59,7 @@ export const CellHighlights = former(
   ({ game, coord }, { item, author }) => where(
     compute(computations.gameCell, { game, coord }, item),
   ).form({
-    highlights: each(Annotating._forItem({ item }).is({ author }))
-      .form({ participant: author }),
+    highlights: each(Annotating._forItem({ item }).is({ author })).form({ participant: author }),
   }),
 );
 
@@ -88,9 +67,7 @@ function edit(kind: "highlight" | "remove" | "clear") {
   return endpoint(
     `/annotations/${kind}`,
     ({ session, game, coord, participant, item }) => {
-      const fields = kind === "clear"
-        ? { session, game }
-        : { session, game, coord };
+      const fields = kind === "clear" ? { session, game } : { session, game, coord };
 
       const action = kind === "highlight"
         ? Annotating.highlight({ user: participant, item })
@@ -115,9 +92,7 @@ function edit(kind: "highlight" | "remove" | "clear") {
       ];
 
       return receive(fields)
-        .then(Sessioning.current({ session }).responds({
-          subject: participant,
-        }))
+        .then(Sessioning.current({ session }).responds({ subject: participant }))
         .then(
           allowed
             .then(action.responds({}))
@@ -132,17 +107,13 @@ function edit(kind: "highlight" | "remove" | "clear") {
             .named("wrong-game"),
 
           where(
-            no(RoomJoining._getParticipant({ participant }).is({
-              active: true,
-            })),
+            no(RoomJoining._getParticipant({ participant }).is({ active: true })),
           )
             .then(respond({ error: "PARTICIPANT_NOT_ACTIVE" }))
             .named("inactive"),
 
           where(
-            RoomJoining._getParticipant({ participant }).is({
-              active: true,
-            }),
+            RoomJoining._getParticipant({ participant }).is({ active: true }),
             no(ActiveLobby({ participant })),
           )
             .then(respond({ error: "ROOM_NOT_OPEN" }))
