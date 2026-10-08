@@ -67,12 +67,7 @@ async function start(host: { room: string; cookie: string }) {
   return result.data.game as string;
 }
 
-async function edit(
-  action: string,
-  game: string,
-  cookie?: string,
-  target = coord,
-) {
+async function edit(action: string, game: string, cookie?: string, target = coord) {
   return post(`annotations/${action}`, {
     game,
     ...(action === "clear" ? {} : { coord: target }),
@@ -134,9 +129,7 @@ test("members share independent highlights without changing or exposing the boar
   expect(withoutHighlights(state)).toEqual(withoutHighlights(before));
 
   expect((await edit("remove", game, alice.cookie)).response.status).toBe(200);
-  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual(
-    [bob.participant],
-  );
+  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual([bob.participant]);
 });
 
 test("duplicate highlights and absent removals refuse without changing annotations", async () => {
@@ -170,13 +163,9 @@ test("clear removes the author's highlights across games and preserves other aut
     expect((await edit("clear", game, alice.cookie)).response.status).toBe(200);
   }
 
-  expect(await annotations().countDocuments({
-    author: alice.participant,
-  })).toBe(0);
+  expect(await annotations().countDocuments({ author: alice.participant })).toBe(0);
   expect(await annotations().countDocuments()).toBe(1);
-  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual(
-    [bob.participant],
-  );
+  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual([bob.participant]);
 });
 
 test("invalid coordinates and malformed or identity-bearing requests are rejected", async () => {
@@ -202,9 +191,7 @@ test("invalid coordinates and malformed or identity-bearing requests are rejecte
     { game, coord, user: alice.participant },
     { game, coord, participant: alice.participant },
   ]) {
-    expect(
-      (await post("annotations/highlight", body, alice.cookie)).response.status,
-    ).toBe(400);
+    expect((await post("annotations/highlight", body, alice.cookie)).response.status).toBe(400);
   }
 
   expect(await annotations().countDocuments()).toBe(0);
@@ -276,15 +263,9 @@ test("leaving clears that author's annotations before answering and preserves re
   }
 
   expect((await post("rooms/leave", {}, alice.cookie)).response.status).toBe(200);
-  expect(await annotations().countDocuments({
-    author: alice.participant,
-  })).toBe(0);
-  expect((await rooms._getRoom({ room: alice.room }))[0]!.host).toBe(
-    bob.participant,
-  );
-  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual(
-    [bob.participant],
-  );
+  expect(await annotations().countDocuments({ author: alice.participant })).toBe(0);
+  expect((await rooms._getRoom({ room: alice.room }))[0]!.host).toBe(bob.participant);
+  expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual([bob.participant]);
 
   expect((await post("rooms/leave", {}, bob.cookie)).response.status).toBe(200);
   expect(await annotations().countDocuments()).toBe(0);
@@ -297,35 +278,16 @@ test("annotations remain allowed on the current completed game", async () => {
   await withMinePlacement(() => 0, async () => {
     // The center opening is safe and places the mine at cell 0.
     // Revealing cell 0 then loses through the normal API.
-    for (const target of [
-      { row: 1, column: 1 },
-      coord,
-    ]) {
-      const result = await post(
-        "game/reveal",
-        { game, coord: target },
-        alice.cookie,
-      );
-
+    for (const target of [{ row: 1, column: 1 }, coord]) {
+      const result = await post("game/reveal", { game, coord: target }, alice.cookie);
       expect(result.response.status).toBe(200);
     }
   });
 
-  expect(
-    (await current(alice.cookie)).snapshot.status,
-  ).toBe("LOST");
-
-  expect(
-    (await edit("highlight", game, alice.cookie)).response.status,
-  ).toBe(200);
-
-  expect(
-    authors((await current(alice.cookie)).snapshot.cells[0]),
-  ).toEqual([alice.participant]);
-
-  expect(
-    (await edit("clear", game, alice.cookie)).response.status,
-  ).toBe(200);
+  expect((await current(alice.cookie)).snapshot.status).toBe("LOST");
+  expect((await edit("highlight", game, alice.cookie)).response.status).toBe(200);
+  expect(authors((await current(alice.cookie)).snapshot.cells[0])).toEqual([alice.participant]);
+  expect((await edit("clear", game, alice.cookie)).response.status).toBe(200);
 });
 
 test("closing the room through the last departure prevents annotation with a valid session", async () => {
@@ -334,22 +296,12 @@ test("closing the room through the last departure prevents annotation with a val
 
   // End membership through the concept action.
   // Calling this directly leaves the session valid.
-  await rooms.leave({
-    participant: alice.participant,
-  });
+  await rooms.leave({ participant: alice.participant });
 
-  expect(
-    (await rooms._getRoom({ room: alice.room }))[0]!.status,
-  ).toBe("CLOSED");
+  expect((await rooms._getRoom({ room: alice.room }))[0]!.status).toBe("CLOSED");
 
   for (const action of ["highlight", "remove", "clear"]) {
-    await refuses(
-      action,
-      game,
-      alice.cookie,
-      403,
-      "FORBIDDEN",
-    );
+    await refuses(action, game, alice.cookie, 403, "FORBIDDEN");
   }
 
   expect(await annotations().countDocuments()).toBe(0);

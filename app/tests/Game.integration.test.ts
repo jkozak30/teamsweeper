@@ -1,12 +1,5 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
-
 import { withMinePlacement } from "./mine-picker.ts";
 import { policy } from "../src/http.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
@@ -63,18 +56,11 @@ async function enter(name: string, code?: string) {
   const header = result.response.headers.get("Set-Cookie");
   if (!header) throw new Error("Expected a session cookie.");
 
-  return {
-    ...result.data,
-    cookie: header.split(";")[0]!,
-  };
+  return { ...result.data, cookie: header.split(";")[0]! };
 }
 
 async function start(host: { room: string; cookie: string }) {
-  const result = await post(
-    "game/start",
-    { room: host.room, settings },
-    host.cookie,
-  );
+  const result = await post("game/start", { room: host.room, settings }, host.cookie);
 
   expect(result.response.status).toBe(200);
   expect(typeof result.data.game).toBe("string");
@@ -107,22 +93,11 @@ function games() {
 }
 
 // Fix the layout so chord outcomes do not depend on random placement.
-async function fixture(
-  game: string,
-  flagged: number[],
-  cookie: string,
-) {
+async function fixture(game: string, flagged: number[], cookie: string) {
   // Choosing the first candidate puts the mine at cell 0.
   const reveal = await withMinePlacement(
     () => 0,
-    () => post(
-      "game/reveal",
-      {
-        game,
-        coord: { row: 1, column: 1 },
-      },
-      cookie,
-    ),
+    () => post("game/reveal", { game, coord: { row: 1, column: 1 } }, cookie),
   );
 
   expect(reveal.response.status).toBe(200);
@@ -132,10 +107,7 @@ async function fixture(
       "game/flag",
       {
         game,
-        coord: {
-          row: Math.floor(cell / 3),
-          column: cell % 3,
-        },
+        coord: { row: Math.floor(cell / 3), column: cell % 3 },
         value: true,
       },
       cookie,
@@ -151,10 +123,7 @@ async function fixture(
 test("the host starts an associated idle game with hidden contents", async () => {
   const alice = await enter("Alice");
 
-  expect(await current(alice.cookie)).toEqual({
-    game: null,
-    snapshot: null,
-  });
+  expect(await current(alice.cookie)).toEqual({ game: null, snapshot: null });
 
   const game = await start(alice);
   const room = (await rooms._getRoom({ room: alice.room }))[0]!;
@@ -185,19 +154,11 @@ test("two members share flags and safe first reveals through the API", async () 
   const game = await start(alice);
   const coord = { row: 0, column: 0 };
 
-  const flag = await post(
-    "game/flag",
-    { game, coord, value: true },
-    bob.cookie,
-  );
+  const flag = await post("game/flag", { game, coord, value: true }, bob.cookie);
   expect(flag.response.status).toBe(200);
   expect((await current(alice.cookie)).snapshot.cells[0].flagged).toBe(true);
 
-  const unflag = await post(
-    "game/flag",
-    { game, coord, value: false },
-    alice.cookie,
-  );
+  const unflag = await post("game/flag", { game, coord, value: false }, alice.cookie);
   expect(unflag.response.status).toBe(200);
 
   const reveal = await post("game/reveal", { game, coord }, bob.cookie);
@@ -356,24 +317,15 @@ test("correct chording wins and the former returns statistics and visible mines"
 
   await fixture(game, [0], alice.cookie);
 
-  const chord = await post(
-    "game/chord",
-    { game, coord: { row: 1, column: 1 } },
-    bob.cookie,
-  );
+  const chord = await post("game/chord", { game, coord: { row: 1, column: 1 } }, bob.cookie);
   expect(chord.response.status).toBe(200);
 
   const state = await current(alice.cookie);
   expect(state.snapshot.status).toBe("WON");
   expect(
-    state.snapshot.cells.filter(
-      (cell: { revealed: boolean }) => cell.revealed,
-    ),
+    state.snapshot.cells.filter((cell: { revealed: boolean }) => cell.revealed),
   ).toHaveLength(8);
-  expect(state.snapshot.cells[0]).toMatchObject({
-    mine: true,
-    triggered: false,
-  });
+  expect(state.snapshot.cells[0]).toMatchObject({ mine: true, triggered: false });
   expect(state.snapshot.results).toHaveLength(1);
   expect(state.snapshot.results[0].bv).toBe(1);
   expect(state.snapshot.results[0].clicks).toBe(3);
@@ -396,19 +348,12 @@ test("incorrect chording loses and exposes the triggered mine", async () => {
 
   await fixture(game, [1], alice.cookie);
 
-  const chord = await post(
-    "game/chord",
-    { game, coord: { row: 1, column: 1 } },
-    alice.cookie,
-  );
+  const chord = await post("game/chord", { game, coord: { row: 1, column: 1 } }, alice.cookie);
   expect(chord.response.status).toBe(200);
 
   const state = await current(alice.cookie);
   expect(state.snapshot.status).toBe("LOST");
-  expect(state.snapshot.cells[0]).toMatchObject({
-    mine: true,
-    triggered: true,
-  });
+  expect(state.snapshot.cells[0]).toMatchObject({ mine: true, triggered: true });
   expect(state.snapshot.cells[1]).toMatchObject({
     flagged: true,
     revealed: false,

@@ -1,9 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import {
-  SessioningConcept,
-  UnknownSession,
-  EndSessionNotActive,
-} from "../src/concepts/Sessioning.ts";
+import { SessioningConcept, UnknownSession, EndSessionNotActive } from "../src/concepts/Sessioning.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
 let testDb: TestDb;
@@ -29,42 +25,52 @@ test("a session starts, resolves, and becomes unavailable after ending", async (
 
   expect(issued.session.length).toBeGreaterThan(0);
   expect(issued.expiresAt).toEqual(new Date("2026-10-07T12:30:00Z"));
-  expect(await sessions.current({ session: issued.session }))
-    .toEqual({ subject: "participant-a" });
+  expect(await sessions.current({ session: issued.session })).toEqual({ subject: "participant-a" });
   expect(await sessions._active({ session: issued.session })).toEqual([{
     subject: "participant-a",
     expiresAt: issued.expiresAt,
   }]);
 
-  expect(await sessions.end({ session: issued.session }))
-    .toEqual({ ended: true });
+  expect(await sessions.end({ session: issued.session })).toEqual({ ended: true });
   expect(await sessions._active({ session: issued.session })).toEqual([]);
 
-  await expect(sessions.current({ session: issued.session }))
-    .rejects.toBeInstanceOf(UnknownSession);
-  await expect(sessions.end({ session: issued.session }))
-    .rejects.toBeInstanceOf(EndSessionNotActive);
+  await expect(
+    sessions.current({ session: issued.session }),
+  ).rejects.toBeInstanceOf(UnknownSession);
+
+  await expect(
+    sessions.end({ session: issued.session }),
+  ).rejects.toBeInstanceOf(EndSessionNotActive);
 });
 
 test("unknown and exactly-expired sessions are refused", async () => {
-  await expect(sessions.current({ session: "invented" }))
-    .rejects.toBeInstanceOf(UnknownSession);
-  await expect(sessions.end({ session: "invented" }))
-    .rejects.toBeInstanceOf(EndSessionNotActive);
+  await expect(
+    sessions.current({ session: "invented" }),
+  ).rejects.toBeInstanceOf(UnknownSession);
+
+  await expect(
+    sessions.end({ session: "invented" }),
+  ).rejects.toBeInstanceOf(EndSessionNotActive);
+
   expect(await sessions._active({ session: "invented" })).toEqual([]);
 
   const issued = await sessions.start({ subject: "participant-a" });
 
   now = new Date(issued.expiresAt.getTime() - 1);
-  expect(await sessions.current({ session: issued.session }))
-    .toEqual({ subject: "participant-a" });
+
+  expect(await sessions.current({ session: issued.session })).toEqual({ subject: "participant-a" });
 
   now = issued.expiresAt;
+
   expect(await sessions._active({ session: issued.session })).toEqual([]);
-  await expect(sessions.current({ session: issued.session }))
-    .rejects.toBeInstanceOf(UnknownSession);
-  await expect(sessions.end({ session: issued.session }))
-    .rejects.toBeInstanceOf(EndSessionNotActive);
+
+  await expect(
+    sessions.current({ session: issued.session }),
+  ).rejects.toBeInstanceOf(UnknownSession);
+
+  await expect(
+    sessions.end({ session: issued.session }),
+  ).rejects.toBeInstanceOf(EndSessionNotActive);
 });
 
 test("sessions remain independent and persist across concept instances", async () => {
@@ -75,15 +81,15 @@ test("sessions remain independent and persist across concept instances", async (
   expect(new Set([first.session, second.session, third.session]).size).toBe(3);
 
   const reader = new SessioningConcept(testDb.db, () => now);
-  expect(await reader.current({ session: first.session }))
-    .toEqual({ subject: "participant-a" });
+
+  expect(await reader.current({ session: first.session })).toEqual({ subject: "participant-a" });
 
   await sessions.end({ session: first.session });
 
-  await expect(reader.current({ session: first.session }))
-    .rejects.toBeInstanceOf(UnknownSession);
-  expect(await reader.current({ session: second.session }))
-    .toEqual({ subject: "participant-a" });
-  expect(await reader.current({ session: third.session }))
-    .toEqual({ subject: "participant-b" });
+  await expect(
+    reader.current({ session: first.session }),
+  ).rejects.toBeInstanceOf(UnknownSession);
+
+  expect(await reader.current({ session: second.session })).toEqual({ subject: "participant-a" });
+  expect(await reader.current({ session: third.session })).toEqual({ subject: "participant-b" });
 });
