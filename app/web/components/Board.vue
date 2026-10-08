@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
-import { tint, type PlayerColors, type RGB } from "../colors.ts";
+import { tint, type PlayerColors } from "../colors.ts";
 
 type Snapshot = NonNullable<
   TeamsweeperWireHttp["/game/current"]["output"]["snapshot"]
@@ -119,7 +119,7 @@ function cellTint(cell: Cell) {
   // Polar mixing depends on order; all clients use the same ordering.
   const colors = authors.sort()
     .map(author => props.colors[author])
-    .filter((color): color is RGB => !!color);
+    .filter((color): color is string => !!color);
 
   return tint(colors, 0.32);
 }
