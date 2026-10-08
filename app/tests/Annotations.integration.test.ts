@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 import { policy } from "../src/http.ts";
+import { withMinePlacement } from "./mine-picker.ts";
 
 let testDb: TestDb;
 let api: ReturnType<typeof createTestApp>["api"];
@@ -293,36 +294,62 @@ test("annotations remain allowed on the current completed game", async () => {
   const alice = await enter("Alice");
   const game = await start(alice);
 
-  await testDb.db.collection<{ _id: string }>("minesweeperPlaying.games")
-    .updateOne({ _id: game }, {
-      $set: {
-        status: "LOST",
-        mines: [0],
-        revealed: [0],
-        startedAt: new Date(Date.now() - 10_000),
-        endedAt: new Date(),
-      },
-    });
+  await withMinePlacement(() => 0, async () => {
+    // The center opening is safe and places the mine at cell 0.
+    // Revealing cell 0 then loses through the normal API.
+    for (const target of [
+      { row: 1, column: 1 },
+      coord,
+    ]) {
+      const result = await post(
+        "game/reveal",
+        { game, coord: target },
+        alice.cookie,
+      );
 
-  expect((await edit("highlight", game, alice.cookie)).response.status).toBe(200);
-  expect(authors((await current(alice.cookie)).snapshot.cells[0])).toEqual(
-    [alice.participant],
-  );
-  expect((await edit("clear", game, alice.cookie)).response.status).toBe(200);
+      expect(result.response.status).toBe(200);
+    }
+  });
+
+  expect(
+    (await current(alice.cookie)).snapshot.status,
+  ).toBe("LOST");
+
+  expect(
+    (await edit("highlight", game, alice.cookie)).response.status,
+  ).toBe(200);
+
+  expect(
+    authors((await current(alice.cookie)).snapshot.cells[0]),
+  ).toEqual([alice.participant]);
+
+  expect(
+    (await edit("clear", game, alice.cookie)).response.status,
+  ).toBe(200);
 });
 
-test("an unavailable room refuses annotations despite an active member and session", async () => {
+test("closing the room through the last departure prevents annotation with a valid session", async () => {
   const alice = await enter("Alice");
   const game = await start(alice);
 
-  // Simulate unavailable room state without ending the member's session.
-  await testDb.db.collection<{ _id: string }>("roomJoining.rooms")
-    .updateOne({ _id: alice.room }, {
-      $set: { status: "CLOSED" },
-    });
+  // End membership through the concept action.
+  // Calling this directly leaves the session valid.
+  await rooms.leave({
+    participant: alice.participant,
+  });
+
+  expect(
+    (await rooms._getRoom({ room: alice.room }))[0]!.status,
+  ).toBe("CLOSED");
 
   for (const action of ["highlight", "remove", "clear"]) {
-    await refuses(action, game, alice.cookie, 409, "CONFLICT");
+    await refuses(
+      action,
+      game,
+      alice.cookie,
+      403,
+      "FORBIDDEN",
+    );
   }
 
   expect(await annotations().countDocuments()).toBe(0);

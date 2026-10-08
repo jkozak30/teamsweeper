@@ -9,6 +9,10 @@ import {
   type Status,
 } from "../src/concepts/MinesweeperPlaying.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
+import {
+  minePicker,
+  withMinePlacement,
+} from "./mine-picker.ts";
 
 interface FixtureDocument {
   _id: string;
@@ -53,6 +57,7 @@ async function board(game: string) {
 
 // Fixed valid PLAYING boards make rule tests independent of randomness.
 // Numeric cells use row * width + column.
+// Reach deterministic boards through actual concept actions.
 async function fixture(
   height: number,
   width: number,
@@ -60,20 +65,52 @@ async function fixture(
   revealed: number[] = [],
   flagged: number[] = [],
 ) {
-  const game = crypto.randomUUID();
+  const at = (cell: number) =>
+    coord(Math.floor(cell / width), cell % width);
 
-  await testDb.db
-    .collection<FixtureDocument>("minesweeperPlaying.games")
-    .insertOne({
-      _id: game,
-      settings: { height, width, mines: mines.length },
-      status: "PLAYING",
-      mines,
-      revealed,
-      flagged,
-      clicks: 1,
-      startedAt: start,
+  // If no opening is specified, reveal a safe numbered cell.
+  const seed = revealed[0] ??
+    Array.from(
+      { length: height * width },
+      (_, cell) => cell,
+    ).find(cell =>
+      !mines.includes(cell) &&
+      mines.some(mine =>
+        Math.abs(at(cell).row - at(mine).row) <= 1 &&
+        Math.abs(at(cell).column - at(mine).column) <= 1
+      )
+    )!;
+
+  playing = new MinesweeperPlayingConcept(testDb.db);
+
+  const { game } = await playing.create({
+    settings: {
+      height,
+      width,
+      mines: mines.length,
+    },
+  });
+
+  for (const cell of flagged) {
+    await playing.flag({
+      game,
+      coord: at(cell),
+      value: true,
     });
+  }
+
+  await withMinePlacement(
+    minePicker(height * width, seed, mines),
+    async () => {
+      for (const cell of revealed.length ? revealed : [seed]) {
+        await playing.reveal({
+          game,
+          coord: at(cell),
+          now: start,
+        });
+      }
+    },
+  );
 
   return game;
 }
@@ -170,7 +207,7 @@ test("zero expansion reveals its boundary but skips flagged safe cells", async (
   expect(expanded.cells.filter(cell => cell.revealed)).toHaveLength(7);
   expect(expanded.cells[4]).toMatchObject({ revealed: true, adjacent: 1 });
   expect(expanded.cells[8]).toMatchObject({ revealed: false, flagged: true });
-  expect(expanded.clicks).toBe(2);
+  expect(expanded.clicks).toBe(3);
 
   await playing.flag({ game, coord: coord(2, 2), value: false });
 
@@ -184,12 +221,12 @@ test("zero expansion reveals its boundary but skips flagged safe cells", async (
 });
 
 test("revealing a number does not expand or leak hidden contents", async () => {
-  const game = await fixture(3, 3, [0]);
+  const game = await fixture(3, 3, [0], [3]);
 
   await playing.reveal({ game, coord: coord(0, 1), now: end });
   const visible = await board(game);
 
-  expect(visible.cells.filter(cell => cell.revealed)).toHaveLength(1);
+  expect(visible.cells.filter(cell => cell.revealed)).toHaveLength(2);
   expect(visible.cells[1]!.adjacent).toBe(1);
 
   for (const cell of visible.cells.filter(cell => !cell.revealed)) {
@@ -224,7 +261,7 @@ test("correct chording expands neighbors, wins, and counts as one click", async 
   })).toEqual({ status: "WON" });
 
   const visible = await board(game);
-  expect(visible.clicks).toBe(2);
+  expect(visible.clicks).toBe(3);
   expect(visible.cells.filter(cell => cell.revealed)).toHaveLength(8);
   expect(visible.cells[0]).toMatchObject({ flagged: true, revealed: false });
 });
@@ -241,7 +278,7 @@ test("matching flag count with an incorrect flag makes chording lose", async () 
   const visible = await board(game);
   expect(visible.cells[0]).toMatchObject({ mine: true, triggered: true });
   expect(visible.cells[1]).toMatchObject({ flagged: true, revealed: false });
-  expect(visible.clicks).toBe(2);
+  expect(visible.clicks).toBe(3);
 });
 
 test("moves refuse missing games and queries return no rows", async () => {
@@ -322,10 +359,18 @@ test("chording refuses idle games, mismatched flags, and empty targets", async (
     game: mismatch, coord: coord(1, 1), now: end,
   })).rejects.toBeInstanceOf(MoveNotAllowed);
 
-  const empty = await fixture(3, 3, [0], [1, 2, 3, 4, 5], [0]);
+  const empty = await fixture(
+    3,
+    3,
+    [1, 8],
+    [0, 3, 4],
+    [1],
+  );
 
   await expect(playing.chord({
-    game: empty, coord: coord(0, 1), now: end,
+    game: empty,
+    coord: coord(0, 0),
+    now: end,
   })).rejects.toBeInstanceOf(MoveNotAllowed);
 });
 
