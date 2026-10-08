@@ -40,9 +40,7 @@ export class MinesweeperPlayingConcept {
       !Number.isSafeInteger(mines) || mines <= 0 ||
       mines >= height * width
     ) {
-      throw new InvalidSettings(
-        "Use positive safe integer dimensions and fewer mines than cells.",
-      );
+      throw new InvalidSettings("Use positive safe integer dimensions and fewer mines than cells.");
     }
 
     const game = crypto.randomUUID();
@@ -66,9 +64,7 @@ export class MinesweeperPlayingConcept {
     const { document, cell } = await this.#move(game, coord);
 
     if (document.revealed.includes(cell) || document.flagged.includes(cell)) {
-      throw new MoveNotAllowed(
-        "That move is not allowed in the current game state.",
-      );
+      throw new MoveNotAllowed("That move is not allowed in the current game state.");
     }
 
     if (document.status === "IDLE") {
@@ -89,9 +85,7 @@ export class MinesweeperPlayingConcept {
       document.revealed.includes(cell) ||
       document.flagged.includes(cell) === value
     ) {
-      throw new MoveNotAllowed(
-        "That move is not allowed in the current game state.",
-      );
+      throw new MoveNotAllowed("That move is not allowed in the current game state.");
     }
 
     if (value) {
@@ -121,9 +115,7 @@ export class MinesweeperPlayingConcept {
       flags.length !== this.#adjacent(document, cell) ||
       targets.length === 0
     ) {
-      throw new MoveNotAllowed(
-        "That move is not allowed in the current game state.",
-      );
+      throw new MoveNotAllowed("That move is not allowed in the current game state.");
     }
 
     return this.#applyReveal(document, targets, now);
@@ -138,12 +130,8 @@ export class MinesweeperPlayingConcept {
       status: document.status,
       clicks: document.clicks,
       flagsRemaining: document.settings.mines - document.flagged.length,
-      ...(document.startedAt === undefined
-        ? {}
-        : { startedAt: document.startedAt }),
-      ...(document.endedAt === undefined
-        ? {}
-        : { endedAt: document.endedAt }),
+      ...(document.startedAt === undefined ? {} : { startedAt: document.startedAt }),
+      ...(document.endedAt === undefined ? {} : { endedAt: document.endedAt }),
     }];
   }
 
@@ -151,8 +139,7 @@ export class MinesweeperPlayingConcept {
     const document = await this.games.findOne({ _id: game });
     if (!document) return [];
 
-    const finished =
-      document.status === "WON" || document.status === "LOST";
+    const finished = document.status === "WON" || document.status === "LOST";
 
     const cells: {
       coord: Coordinate;
@@ -231,9 +218,7 @@ export class MinesweeperPlayingConcept {
       document.status === "LOST" ||
       !this.#validCoord(document, coord)
     ) {
-      throw new MoveNotAllowed(
-        "That move is not allowed in the current game state.",
-      );
+      throw new MoveNotAllowed("That move is not allowed in the current game state.");
     }
 
     const cell = coord.row * document.settings.width + coord.column;
@@ -269,18 +254,10 @@ export class MinesweeperPlayingConcept {
 
     for (let dr = -1; dr <= 1; dr++) {
       for (let dc = -1; dc <= 1; dc++) {
-        const coord = {
-          row: row + dr,
-          column: column + dc,
-        };
+        const coord = { row: row + dr, column: column + dc };
 
-        if (
-          (dr !== 0 || dc !== 0) &&
-          this.#validCoord(document, coord)
-        ) {
-          neighbors.push(
-            coord.row * document.settings.width + coord.column,
-          );
+        if ((dr !== 0 || dc !== 0) && this.#validCoord(document, coord)) {
+          neighbors.push(coord.row * document.settings.width + coord.column);
         }
       }
     }
@@ -306,10 +283,7 @@ export class MinesweeperPlayingConcept {
     for (let i = 0; i < document.settings.mines; i++) {
       const chosen = i + randomInt(candidates.length - i);
 
-      [candidates[i], candidates[chosen]] = [
-        candidates[chosen]!,
-        candidates[i]!,
-      ];
+      [candidates[i], candidates[chosen]] = [candidates[chosen]!, candidates[i]!];
     }
 
     document.mines = candidates.slice(0, document.settings.mines);
@@ -328,10 +302,7 @@ export class MinesweeperPlayingConcept {
 
       revealed.add(cell);
 
-      if (
-        !mines.has(cell) &&
-        this.#adjacent(document, cell) === 0
-      ) {
+      if (!mines.has(cell) && this.#adjacent(document, cell) === 0) {
         pending.push(...this.#neighbors(document, cell));
       }
     }
@@ -340,9 +311,7 @@ export class MinesweeperPlayingConcept {
   }
 
   #finish(document: GameDocument, now: Date) {
-    if (
-      document.revealed.some(cell => document.mines.includes(cell))
-    ) {
+    if (document.revealed.some(cell => document.mines.includes(cell))) {
       document.status = "LOST";
       document.endedAt = now;
     } else if (

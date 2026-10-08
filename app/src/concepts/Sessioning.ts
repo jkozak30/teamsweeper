@@ -24,18 +24,12 @@ export class SessioningConcept {
   async start({ subject }: { subject: string }) {
     const now = this.clock();
 
-    await this.sessions.deleteMany({
-      expiresAt: { $lte: now },
-    });
+    await this.sessions.deleteMany({ expiresAt: { $lte: now } });
 
     const session = crypto.randomUUID();
     const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
 
-    await this.sessions.insertOne({
-      _id: session,
-      subject,
-      expiresAt,
-    });
+    await this.sessions.insertOne({ _id: session, subject, expiresAt });
 
     return { session, expiresAt };
   }

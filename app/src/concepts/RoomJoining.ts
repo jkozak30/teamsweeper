@@ -67,12 +67,7 @@ export class RoomJoiningConcept {
     }
 
     try {
-      await this.participants.insertOne({
-        _id: participant,
-        room,
-        name,
-        active: true,
-      });
+      await this.participants.insertOne({ _id: participant, room, name, active: true });
     } catch (error) {
       await this.rooms.deleteOne({ _id: room });
       throw error;
@@ -104,10 +99,7 @@ export class RoomJoiningConcept {
   }
 
   async leave({ participant }: { participant: string }) {
-    const member = await this.participants.findOne({
-      _id: participant,
-      active: true,
-    });
+    const member = await this.participants.findOne({ _id: participant, active: true });
 
     if (!member) {
       throw new ParticipantNotActive("That participant is not active.");
@@ -223,10 +215,7 @@ export class RoomJoiningConcept {
       .sort({ _id: 1 })
       .toArray();
 
-    return documents.map(({ _id, name }) => ({
-      participant: _id,
-      name,
-    }));
+    return documents.map(({ _id, name }) => ({ participant: _id, name }));
   }
 
   async #ensureIndexes() {

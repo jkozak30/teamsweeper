@@ -4,10 +4,7 @@ export class AlreadyHighlighted extends Error {}
 export class HighlightNotFound extends Error {}
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
+  | string | number | boolean | null
   | JsonValue[]
   | { [key: string]: JsonValue };
 
@@ -19,10 +16,7 @@ function canonical(value: JsonValue): JsonValue {
 
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.keys(value).sort().map(key => [
-        key,
-        canonical(value[key]!),
-      ]),
+      Object.keys(value).sort().map(key => [key, canonical(value[key]!)]),
     );
   }
 
@@ -39,9 +33,7 @@ export class AnnotatingConcept {
   private readonly annotations: Collection<AnnotationDocument>;
 
   constructor(db: Db) {
-    this.annotations = db.collection<AnnotationDocument>(
-      "annotating.annotations",
-    );
+    this.annotations = db.collection<AnnotationDocument>("annotating.annotations");
   }
 
   async highlight({ user, item }: { user: string; item: Item }) {
@@ -55,9 +47,7 @@ export class AnnotatingConcept {
       });
     } catch (error) {
       if (error instanceof MongoServerError && error.code === 11000) {
-        throw new AlreadyHighlighted(
-          "You have already highlighted that item.",
-        );
+        throw new AlreadyHighlighted("You have already highlighted that item.");
       }
 
       throw error;
@@ -72,9 +62,7 @@ export class AnnotatingConcept {
     });
 
     if (result.deletedCount === 0) {
-      throw new HighlightNotFound(
-        "You have not highlighted that item.",
-      );
+      throw new HighlightNotFound("You have not highlighted that item.");
     }
 
     return {};
