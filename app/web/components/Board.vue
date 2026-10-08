@@ -18,6 +18,7 @@ const props = defineProps<{
   players: { participant: string; name: string }[];
   colors: PlayerColors;
   pendingCell: string | null;
+  pendingCells: string[];
 }>();
 
 const emit = defineEmits<{
@@ -157,7 +158,7 @@ function label(cell: Cell) {
       :class="{
         revealed: cell.revealed,
         triggered: cell.triggered,
-        pending: pendingCell === key(cell.coord),
+        pending: pendingCell === key(cell.coord) || pendingCells.includes(key(cell.coord)),
       }"
       :style="{
         backgroundImage: `linear-gradient(${cellTint(cell)}, ${cellTint(cell)})`,

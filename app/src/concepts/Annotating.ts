@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { MongoServerError, type Collection, type Db } from "mongodb";
 
 export class AlreadyHighlighted extends Error {}
@@ -31,6 +32,7 @@ interface AnnotationDocument {
 
 export class AnnotatingConcept {
   private readonly annotations: Collection<AnnotationDocument>;
+  private authorIndex: Promise<string> | null = null;
 
   constructor(db: Db) {
     this.annotations = db.collection<AnnotationDocument>("annotating.annotations");
@@ -82,7 +84,16 @@ export class AnnotatingConcept {
     return documents.map(({ author }) => ({ author }));
   }
 
+  async _sync({ user, since }: { user: string; since: string }) {
+    await this.#ensureAuthorIndex();
+    const documents = await this.annotations.find({ author: user }).sort({ _id: 1 }).toArray();
+    const targets = documents.map(({ target }) => target);
+    const cursor = createHash("sha256").update(JSON.stringify(targets)).digest("hex");
+    return { cursor, targets: since === cursor ? null : targets };
+  }
+
   async _byUser({ user }: { user: string }) {
+    await this.#ensureAuthorIndex();
     const documents = await this.annotations
       .find({ author: user })
       .sort({ _id: 1 })
@@ -90,4 +101,13 @@ export class AnnotatingConcept {
 
     return documents.map(({ target }) => ({ target }));
   }
+
+  #ensureAuthorIndex() {
+    this.authorIndex ??= this.annotations.createIndex({ author: 1, _id: 1 }).catch(error => {
+      this.authorIndex = null;
+      throw error;
+    });
+    return this.authorIndex;
+  }
+
 }

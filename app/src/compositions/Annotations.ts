@@ -56,10 +56,12 @@ const Cell = view(
 
 export const CellHighlights = former(
   "the cell highlighters",
-  ({ game, coord }, { item, author }) => where(
+  ({ room, game, coord }, { item, author }) => where(
     compute(computations.gameCell, { game, coord }, item),
   ).form({
-    highlights: each(Annotating._forItem({ item }).is({ author })).form({ participant: author }),
+    highlights: each(RoomJoining._activeParticipants({ room }).is({ participant: author }))
+      .where(Annotating._byUser({ user: author }).is({ target: item }))
+      .form({ participant: author }),
   }),
 );
 

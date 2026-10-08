@@ -15,8 +15,11 @@ Annotations.Remove at /annotations/remove
 Annotations.Clear at /annotations/clear
 ```
 
-The [cell highlighters](former:Annotations.CellHighlights) appear as
-participant identities in each cell's highlights array in Game.Current.
+The [cell highlighters](former:Annotations.CellHighlights) take room, game,
+and coord and select active participants whose Annotating._byUser targets
+include that GameCell. They appear as participant identities in each cell's
+highlights array in Game.Current. Incremental reads use Annotating._sync
+through Game.Changes to avoid retransmitting unchanged target lists.
 Highlights do not reveal hidden cell contents or alter game moves.
 They are permitted before, during, and after play while the game is current.
 

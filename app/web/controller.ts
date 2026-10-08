@@ -2,6 +2,8 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { ClientCallOptions } from "@mit-sdg/sync-engine/client";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
+import { createActionQueue } from "./action-queue.ts";
+import { applyBoard, applyAnnotations, type AnnotationCache } from "./sync.ts";
 import { playerColors } from "./colors.ts";
 
 type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
@@ -24,6 +26,9 @@ export function useTeamsweeperController() {
   const busy = ref(true);
   const boardPending = ref(false);
   const pendingCell = ref<string | null>(null);
+  const pendingCells = ref<string[]>([]);
+  const queuedActions = ref(0);
+  const controlsPending = computed(() => boardPending.value || queuedActions.value > 0);
   const syncProblem = ref(false);
   const lastSynced = ref(0);
   const clock = ref(Date.now());
@@ -50,6 +55,10 @@ export function useTeamsweeperController() {
   const key = (coord: Coordinate) =>
     `${coord.row},${coord.column}`;
 
+  let boardRevision = -1;
+  let annotationCursors: Record<string, string> = {};
+  const annotationCache: AnnotationCache = new Map();
+
   let revision = 0;
   let pendingRead: Promise<void> | null = null;
   let readController: AbortController | null = null;
@@ -57,7 +66,47 @@ export function useTeamsweeperController() {
   let timer: ReturnType<typeof setInterval> | undefined;
   let disposed = false;
 
+  const queue = createActionQueue(
+    () => !disposed && !busy.value && !syncProblem.value && !!gameState.value?.game,
+    pending => {
+      queuedActions.value = pending.length;
+      pendingCells.value = pending.filter((cell): cell is string => cell !== null);
+    },
+  );
+
+  function enqueue(operation: () => Promise<unknown> | undefined, coord?: Coordinate) {
+    const game = gameState.value?.game;
+    const result = queue.enqueue(async () => {
+      if (gameState.value?.game !== game) {
+        status.value = "Queued moves were discarded because the game changed.";
+        return;
+      }
+      return operation();
+    }, coord ? key(coord) : null);
+    if (!result) status.value = "Waiting to reconnect, or too many moves are already queued.";
+    return result;
+  }
+
+  function move(kind: "reveal" | "flag" | "chord", coord: Coordinate, value = false) {
+    return enqueue(() => performMove(kind, coord, value), coord);
+  }
+
+  function toggleHighlight(coord: Coordinate) {
+    return enqueue(() => performToggleHighlight(coord), coord);
+  }
+
+  function paintHighlights(coords: Coordinate[]) {
+    return enqueue(() => performPaintHighlights(coords));
+  }
+
+  function clearHighlights() {
+    return enqueue(() => performClearHighlights());
+  }
+
   function clearRoom() {
+    boardRevision = -1;
+    annotationCursors = {};
+    annotationCache.clear();
     lobby.value = null;
     gameState.value = null;
     screen.value = "lobby";
@@ -125,7 +174,10 @@ export function useTeamsweeperController() {
 
       if (!lobby.value) return;
 
-      const game = await api.game.current({}, options);
+      const knownGame = gameState.value?.game ?? "";
+      const game = await api.game.updates({
+        game: knownGame, since: boardRevision, cursors: annotationCursors,
+      }, options);
       if (obsolete()) return;
 
       if ("error" in game) {
@@ -139,12 +191,35 @@ export function useTeamsweeperController() {
         return;
       }
 
-      if (game.snapshot && game.game !== gameState.value?.game) {
-        settings.value = { ...game.snapshot.settings };
-        screen.value = "game";
+      if (!game.changes || !game.game) {
+        gameState.value = { game: null, snapshot: null };
+        boardRevision = -1;
+        annotationCursors = {};
+        annotationCache.clear();
+      } else {
+        const changedGame = game.game !== knownGame;
+        const update = game.changes.update;
+        if (!changedGame && boardRevision >= 0 && update.revision < boardRevision) return;
+        if (changedGame) {
+          annotationCursors = {};
+          annotationCache.clear();
+          settings.value = { ...update.settings };
+          screen.value = "game";
+        }
+        try {
+          const board = applyBoard(gameState.value, game.game, update);
+          gameState.value = applyAnnotations(board, game.changes.annotations, annotationCache);
+          boardRevision = update.revision;
+          annotationCursors = Object.fromEntries(
+            game.changes.annotations.map(({ participant, cursor }) => [participant, cursor]),
+          );
+        } catch (error) {
+          boardRevision = -1;
+          annotationCursors = {};
+          annotationCache.clear();
+          throw error;
+        }
       }
-
-      gameState.value = game;
       lastSynced.value = Date.now();
       clock.value = Date.now();
       syncProblem.value = false;
@@ -178,7 +253,7 @@ export function useTeamsweeperController() {
 
   async function run(
     mode: "room" | "board",
-    operation: (options: ClientCallOptions) => Promise<void>,
+    operation: (options: ClientCallOptions) => Promise<void | boolean>,
     optimistic?: () => void,
     coord?: Coordinate,
   ) {
@@ -190,6 +265,7 @@ export function useTeamsweeperController() {
     }
 
     const before = gameState.value;
+    let confirmedBoard = false;
 
     if (mode === "room") busy.value = true;
     else boardPending.value = true;
@@ -210,7 +286,7 @@ export function useTeamsweeperController() {
       if (pendingRead) await pendingRead.catch(() => {});
       if (disposed) return;
 
-      await operation({ signal: controller.signal });
+      confirmedBoard = await operation({ signal: controller.signal }) === true;
     } catch (error) {
       if (!disposed) {
         if (lobby.value && gameState.value?.game === before?.game) {
@@ -227,12 +303,14 @@ export function useTeamsweeperController() {
 
       if (!disposed) {
         try {
-          await refreshState(mode === "board" ? "game" : "full");
-        } catch {
-          if (lobby.value && gameState.value?.game === before?.game) {
-            gameState.value = before;
+          if (!confirmedBoard) await refreshState(mode === "board" ? "game" : "full");
+          else {
+            lastSynced.value = Date.now();
+            clock.value = Date.now();
+            syncProblem.value = false;
           }
-
+        } catch {
+          boardRevision = -1;
           syncProblem.value = true;
           status.value =
             "Could not confirm the latest state. Reconnecting automatically.";
@@ -289,7 +367,7 @@ export function useTeamsweeperController() {
     });
   }
 
-  function move(
+  function performMove(
     kind: "reveal" | "flag" | "chord",
     coord: Coordinate,
     value = false,
@@ -303,11 +381,19 @@ export function useTeamsweeperController() {
       check(await api.annotations.clear({ game }, options));
       if (!canMove) return;
 
-      check(kind === "flag"
-        ? await api.game.flag({ game, coord, value }, options)
+      const since = Math.max(0, boardRevision);
+      const result = kind === "flag"
+        ? await api.game.flag({ game, coord, value, since }, options)
         : kind === "reveal"
-        ? await api.game.reveal({ game, coord }, options)
-        : await api.game.chord({ game, coord }, options));
+        ? await api.game.reveal({ game, coord, since }, options)
+        : await api.game.chord({ game, coord, since }, options);
+      check(result);
+      if ("error" in result) return;
+      const update = result.changes.update;
+      if (boardRevision >= 0 && update.revision < boardRevision) return;
+      gameState.value = applyBoard(gameState.value, game, update);
+      boardRevision = update.revision;
+      return true;
     }, () => updateSnapshot(snapshot => {
       let flagsRemaining = snapshot.flagsRemaining;
 
@@ -335,7 +421,7 @@ export function useTeamsweeperController() {
     }), kind === "flag" ? undefined : coord);
   }
 
-  function toggleHighlight(coord: Coordinate) {
+  function performToggleHighlight(coord: Coordinate) {
     const state = gameState.value;
     const participant = lobby.value?.participant;
 
@@ -370,7 +456,7 @@ export function useTeamsweeperController() {
     })));
   }
 
-  function paintHighlights(coords: Coordinate[]) {
+  function performPaintHighlights(coords: Coordinate[]) {
     const state = gameState.value;
     const participant = lobby.value?.participant;
 
@@ -411,7 +497,7 @@ export function useTeamsweeperController() {
     })));
   }
 
-  function clearHighlights() {
+  function performClearHighlights() {
     const game = gameState.value?.game;
     if (!game) return;
 
@@ -439,7 +525,7 @@ export function useTeamsweeperController() {
 
     if (
       !busy.value &&
-      !boardPending.value &&
+      !controlsPending.value &&
       (lobby.value || syncProblem.value)
     ) {
       void refreshState().catch(() => {
@@ -484,6 +570,8 @@ export function useTeamsweeperController() {
     busy,
     boardPending,
     pendingCell,
+    pendingCells,
+    controlsPending,
     syncProblem,
     isHost,
     colors,

@@ -22,6 +22,7 @@ Defined in [Annotating](../design/concepts/Annotating.md), line 1.
 
 #### Queries
 
+- `_sync(user: User, since: String) : one (cursor: String, targets: Targets)`
 - `_forItem(item: Item) : many (author: User)`
 - `_byUser(user: User) : many (target: Item)`
 
@@ -51,6 +52,7 @@ Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 
 
 #### Queries
 
+- `_updates(game: Game, since: Number) : optional (update: BoardUpdate)`
 - `_getGame(game: Game) : optional (settings: Settings, status: Status, clicks: Number, flagsRemaining: Number, startedAt?: DateTime, endedAt?: DateTime)`
 - `_visibleCells(game: Game) : many (coord: Coordinate, revealed: Flag, flagged: Flag, adjacent?: Number, mine?: Flag, triggered?: Flag)`
 - `_getResult(game: Game) : optional (time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number)`
@@ -116,7 +118,10 @@ Concrete types:
 
 ## Computations
 
-- `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 27.
+- `annotationCursor(cursors: Annotating.Cursors, author: RoomJoining.Participant) : String` — [Game](../design/compositions/Game.md), line 67.
+- `boardCursors(knownGame: String, game: MinesweeperPlaying.Game, cursors: Annotating.Cursors) : Annotating.Cursors` — [Game](../design/compositions/Game.md), line 64.
+- `boardSince(knownGame: String, game: MinesweeperPlaying.Game, since: Number) : Number` — [Game](../design/compositions/Game.md), line 61.
+- `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 30.
 
 ## Views
 
@@ -217,12 +222,44 @@ Authored path: `Annotations.CellHighlights`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```former
-Former "the cell highlighters" — inputs (game, coord); bindings (item, author); promises exactly one record — forms:
+Former "the cell highlighters" — inputs (room, game, coord); bindings (item, author); promises exactly one record — forms:
   a record of
     where item is gameCell (coord, game)
-    highlights: each Annotating._forItem (item) has (author)
+    highlights: each RoomJoining._activeParticipants (room) has (participant: author)
+      where Annotating._byUser (user: author) has (target: item)
       form a record of
         participant: author
+```
+
+### the committed board changes
+
+Authored path: `Game.BoardChanges`.
+- Covered by [Game](../design/compositions/Game.md), line 51.
+
+```former
+Former "the committed board changes" — inputs (game, since); bindings (update); promises exactly one record — forms:
+  a record of
+    where MinesweeperPlaying._updates (game, since) has (update)
+    update
+```
+
+### the incremental game state
+
+Authored path: `Game.Changes`.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+
+```former
+Former "the incremental game state" — inputs (room, game, since, cursors); bindings (update, author, cursor, nextCursor, targets); promises exactly one record — forms:
+  a record of
+    where MinesweeperPlaying._updates (game, since) has (update)
+    annotations: each RoomJoining._activeParticipants (room) has (participant: author)
+      where cursor is annotationCursor (author, cursors)
+      where Annotating._sync (since: cursor, user: author) has (cursor: nextCursor, targets)
+      form a record of
+        cursor: nextCursor
+        participant: author
+        targets
+    update
 ```
 
 ### the visible game state
@@ -231,7 +268,7 @@ Authored path: `Game.Snapshot`.
 - Covered by [Game](../design/compositions/Game.md), line 27.
 
 ```former
-Former "the visible game state" — inputs (game); bindings (settings, status, clicks, flagsRemaining, startedAt, endedAt, coord, revealed, flagged, adjacent, mine, triggered, time, bv, resultClicks, speed, efficiency); promises exactly one record — forms:
+Former "the visible game state" — inputs (room, game); bindings (settings, status, clicks, flagsRemaining, startedAt, endedAt, coord, revealed, flagged, adjacent, mine, triggered, time, bv, resultClicks, speed, efficiency); promises exactly one record — forms:
   a record of
     where MinesweeperPlaying._getGame (game) has (clicks, flagsRemaining, settings, status)
     where whether MinesweeperPlaying._getGame (game) has (startedAt)
@@ -246,7 +283,7 @@ Former "the visible game state" — inputs (game); bindings (settings, status, c
         mine
         revealed
         triggered
-        … former "the cell highlighters" with (coord, game)
+        … former "the cell highlighters" with (coord, game, room)
     clicks
     endedAt
     flagsRemaining
@@ -355,7 +392,7 @@ then
 ### Annotations.ClearOnLeave
 
 Authored path: `Annotations.ClearOnLeave`.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 23.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 26.
 
 ```reaction
 when RoomJoining.leave (participant)
@@ -600,7 +637,7 @@ Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 23.
 
 ```reaction
-when RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+when RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
 then
   Sessioning.current (session)
 ```
@@ -615,7 +652,7 @@ Authored path: `Game.Chord`.
 when Sessioning.current (session, subject: participant), asked by Game.Chord
 where
   no RoomJoining._getParticipant (participant) has (active: true)
-  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
 then
   RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
 ```
@@ -630,7 +667,7 @@ Authored path: `Game.Chord`.
 when Sessioning.current (session, subject: participant), asked by Game.Chord
 where
   instant is the current flow's instant
-  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
   view "whether (participant) may play (game)" with (game, participant)
 then
   MinesweeperPlaying.chord (coord, game, now: instant)
@@ -645,9 +682,9 @@ Authored path: `Game.Chord`.
 ```reaction
 when MinesweeperPlaying.chord (coord, game, now: instant), asked by Game.Chord:member-moves#2
 where
-  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
 then
-  RequestBoundary.respond (game, requestId)
+  RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
 ```
 
 ### Game.Chord:room-unavailable#2
@@ -661,7 +698,7 @@ when Sessioning.current (session, subject: participant), asked by Game.Chord
 where
   RoomJoining._getParticipant (participant) has (active: true)
   no view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
 then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
@@ -676,7 +713,7 @@ Authored path: `Game.Chord`.
 when Sessioning.current (session, subject: participant), asked by Game.Chord
 where
   view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
   no view "whether (participant) may play (game)" with (game, participant)
 then
   RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
@@ -707,7 +744,7 @@ where
   view "the current game of (room)" with (room) has (game)
   earlier, RequestBoundary.request (path: "/game/current", requestId, session)
 then
-  RequestBoundary.respond (game, requestId, snapshot: former "the visible game state" with (game))
+  RequestBoundary.respond (game, requestId, snapshot: former "the visible game state" with (game, room))
 ```
 
 ### Game.Current:inactive#2
@@ -764,7 +801,7 @@ Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 22.
 
 ```reaction
-when RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+when RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
 then
   Sessioning.current (session)
 ```
@@ -779,7 +816,7 @@ Authored path: `Game.Flag`.
 when Sessioning.current (session, subject: participant), asked by Game.Flag
 where
   no RoomJoining._getParticipant (participant) has (active: true)
-  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
 then
   RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
 ```
@@ -794,7 +831,7 @@ Authored path: `Game.Flag`.
 when Sessioning.current (session, subject: participant), asked by Game.Flag
 where
   instant is the current flow's instant
-  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
   view "whether (participant) may play (game)" with (game, participant)
 then
   MinesweeperPlaying.flag (coord, game, value)
@@ -809,9 +846,9 @@ Authored path: `Game.Flag`.
 ```reaction
 when MinesweeperPlaying.flag (coord, game, value), asked by Game.Flag:member-moves#2
 where
-  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
 then
-  RequestBoundary.respond (game, requestId)
+  RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
 ```
 
 ### Game.Flag:room-unavailable#2
@@ -825,7 +862,7 @@ when Sessioning.current (session, subject: participant), asked by Game.Flag
 where
   RoomJoining._getParticipant (participant) has (active: true)
   no view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
 then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
@@ -840,7 +877,7 @@ Authored path: `Game.Flag`.
 when Sessioning.current (session, subject: participant), asked by Game.Flag
 where
   view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, value)
+  earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
   no view "whether (participant) may play (game)" with (game, participant)
 then
   RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
@@ -853,7 +890,7 @@ Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 21.
 
 ```reaction
-when RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+when RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
 then
   Sessioning.current (session)
 ```
@@ -868,7 +905,7 @@ Authored path: `Game.Reveal`.
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
 where
   no RoomJoining._getParticipant (participant) has (active: true)
-  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
 then
   RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
 ```
@@ -883,7 +920,7 @@ Authored path: `Game.Reveal`.
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
 where
   instant is the current flow's instant
-  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
   view "whether (participant) may play (game)" with (game, participant)
 then
   MinesweeperPlaying.reveal (coord, game, now: instant)
@@ -898,9 +935,9 @@ Authored path: `Game.Reveal`.
 ```reaction
 when MinesweeperPlaying.reveal (coord, game, now: instant), asked by Game.Reveal:member-moves#2
 where
-  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
 then
-  RequestBoundary.respond (game, requestId)
+  RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
 ```
 
 ### Game.Reveal:room-unavailable#2
@@ -914,7 +951,7 @@ when Sessioning.current (session, subject: participant), asked by Game.Reveal
 where
   RoomJoining._getParticipant (participant) has (active: true)
   no view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
 then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
@@ -929,7 +966,7 @@ Authored path: `Game.Reveal`.
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
 where
   view "the open room of active (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session)
+  earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
   no view "whether (participant) may play (game)" with (game, participant)
 then
   RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
@@ -1033,6 +1070,83 @@ where
   RoomJoining._getParticipant (participant) has (active: true)
   no view "the open room of active (participant)" with (participant)
   earlier, RequestBoundary.request (path: "/game/start", requestId, room, session, settings)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Game.Updates
+
+Authored path: `Game.Updates`.
+- Covered by [Game](../design/compositions/Game.md), line 35.
+- Covered by [Game](../design/compositions/Game.md), line 57.
+
+```reaction
+when RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
+then
+  Sessioning.current (session)
+```
+
+### Game.Updates:current-updates#2
+
+Authored path: `Game.Updates`.
+- Covered by [Game](../design/compositions/Game.md), line 35.
+- Covered by [Game](../design/compositions/Game.md), line 57.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Updates
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  view "the current game of (room)" with (room) has (game: game$2)
+  earlier, RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
+  effectiveSince is boardSince (game: game$2, knownGame: game, since)
+  effectiveCursors is boardCursors (cursors, game: game$2, knownGame: game)
+then
+  RequestBoundary.respond (changes: former "the incremental game state" with (cursors: effectiveCursors, game: game$2, room, since: effectiveSince), game: game$2, requestId)
+```
+
+### Game.Updates:inactive#2
+
+Authored path: `Game.Updates`.
+- Covered by [Game](../design/compositions/Game.md), line 35.
+- Covered by [Game](../design/compositions/Game.md), line 57.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Updates
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Game.Updates:no-game#2
+
+Authored path: `Game.Updates`.
+- Covered by [Game](../design/compositions/Game.md), line 35.
+- Covered by [Game](../design/compositions/Game.md), line 57.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Updates
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  no view "the current game of (room)" with (room)
+  earlier, RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
+then
+  RequestBoundary.respond (changes: null, game: null, requestId)
+```
+
+### Game.Updates:room-unavailable#2
+
+Authored path: `Game.Updates`.
+- Covered by [Game](../design/compositions/Game.md), line 35.
+- Covered by [Game](../design/compositions/Game.md), line 57.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Game.Updates
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
 then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
@@ -1235,11 +1349,12 @@ not listed here have no explicit input contract.
 - `/annotations/clear` — requires `session`, `game`
 - `/annotations/highlight` — requires `session`, `game`, `coord`
 - `/annotations/remove` — requires `session`, `game`, `coord`
-- `/game/chord` — requires `session`, `game`, `coord`
+- `/game/chord` — requires `session`, `game`, `coord`, `since`
 - `/game/current` — requires `session`
-- `/game/flag` — requires `session`, `game`, `coord`, `value`
-- `/game/reveal` — requires `session`, `game`, `coord`
+- `/game/flag` — requires `session`, `game`, `coord`, `value`, `since`
+- `/game/reveal` — requires `session`, `game`, `coord`, `since`
 - `/game/start` — requires `session`, `room`, `settings`
+- `/game/updates` — requires `session`, `game`, `since`, `cursors`
 - `/rooms/create` — requires `name`
 - `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`

@@ -1,12 +1,12 @@
 import { endpoint, receive, respond, type EndpointValidator } from "@mit-sdg/sync-engine/boundary";
-import { each, former, no, now, view, where, whether } from "@mit-sdg/sync-engine/language";
+import { compute, each, former, no, now, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { CellHighlights } from "./Annotations.ts";
-import { concepts } from "../concepts.ts";
+import { concepts, computations } from "../concepts.ts";
 
 const { RoomJoining, Sessioning, MinesweeperPlaying } = concepts;
 
 // Validate request shapes; concepts still enforce the game rules.
-function input(kind: "start" | "current" | "reveal" | "flag" | "chord"): EndpointValidator {
+function input(kind: "start" | "current" | "updates" | "reveal" | "flag" | "chord"): EndpointValidator {
   return value => {
     const object = (item: unknown): item is Record<string, unknown> =>
       typeof item === "object" && item !== null && !Array.isArray(item);
@@ -22,9 +22,11 @@ function input(kind: "start" | "current" | "reveal" | "flag" | "chord"): Endpoin
       ? ["session", "room", "settings"]
       : kind === "current"
       ? ["session"]
+      : kind === "updates"
+      ? ["session", "game", "since", "cursors"]
       : kind === "flag"
-      ? ["session", "game", "coord", "value"]
-      : ["session", "game", "coord"];
+      ? ["session", "game", "coord", "value", "since"]
+      : ["session", "game", "coord", "since"];
 
     const valid =
       object(value) &&
@@ -41,12 +43,21 @@ function input(kind: "start" | "current" | "reveal" | "flag" | "chord"): Endpoin
       (
         kind === "start" ||
         kind === "current" ||
+        kind === "updates" ||
         (
           typeof value.game === "string" &&
           numeric(value.coord, ["row", "column"])
         )
       ) &&
-      (kind !== "flag" || typeof value.value === "boolean");
+      (kind !== "flag" || typeof value.value === "boolean") &&
+      (kind === "start" || kind === "current" ||
+        (kind === "updates" && value.since === -1) ||
+        (typeof value.since === "number" && Number.isSafeInteger(value.since) && value.since >= 0)) &&
+      (kind !== "updates" || (
+        typeof value.game === "string" &&
+        object(value.cursors) &&
+        Object.values(value.cursors).every(cursor => typeof cursor === "string" && cursor.length <= 64)
+      ));
 
     return valid
       ? { ok: true }
@@ -79,7 +90,7 @@ const PlayableGame = view(
 
 const Snapshot = former(
   "the visible game state",
-  ({ game }, {
+  ({ room, game }, {
     settings, status, clicks, flagsRemaining, startedAt, endedAt,
     coord, revealed, flagged, adjacent, mine, triggered,
     time, bv, resultClicks, speed, efficiency,
@@ -102,7 +113,7 @@ const Snapshot = former(
         whether(MinesweeperPlaying._visibleCells({ game }).is({ coord, mine, triggered })),
       )
       .form({ coord, revealed, flagged, adjacent, mine, triggered })
-      .splicing(CellHighlights({ game, coord })),
+      .splicing(CellHighlights({ room, game, coord })),
     results: each(
       MinesweeperPlaying._getResult({ game }).is({
         time, bv, clicks: resultClicks, speed, efficiency,
@@ -147,14 +158,21 @@ const Start = endpoint(
   },
 );
 
+const BoardChanges = former(
+  "the committed board changes",
+  ({ game, since }, { update }) => where(
+    MinesweeperPlaying._updates({ game, since }).is({ update }),
+  ).form({ update }),
+);
+
 // The moves share membership checks and their success response.
 function move(kind: "reveal" | "flag" | "chord") {
   return endpoint(
     `/game/${kind}`,
-    ({ session, game, coord, value, participant, instant }) => {
+    ({ session, game, coord, value, since, participant, instant, update }) => {
       const fields = kind === "flag"
-        ? { session, game, coord, value }
-        : { session, game, coord };
+        ? { session, game, coord, value, since }
+        : { session, game, coord, since };
 
       const action = kind === "flag"
         ? MinesweeperPlaying.flag({ game, coord, value })
@@ -170,7 +188,7 @@ function move(kind: "reveal" | "flag" | "chord") {
             now(instant),
           )
             .then(action.responds({}))
-            .then(respond({ game }))
+            .then(respond({ game, changes: BoardChanges({ game, since }) }))
             .named("member-moves"),
 
           where(
@@ -195,8 +213,8 @@ function move(kind: "reveal" | "flag" | "chord") {
     {
       input: {
         required: kind === "flag"
-          ? ["session", "game", "coord", "value"]
-          : ["session", "game", "coord"],
+          ? ["session", "game", "coord", "value", "since"]
+          : ["session", "game", "coord", "since"],
       },
       validators: { input: input(kind) },
     },
@@ -217,7 +235,7 @@ const Current = endpoint(
           ActiveRoom({ participant }).is({ room }),
           CurrentGame({ room }).is({ game }),
         )
-          .then(respond({ game, snapshot: Snapshot({ game }) }))
+          .then(respond({ game, snapshot: Snapshot({ room, game }) }))
           .named("current-game"),
 
         where(
@@ -244,7 +262,49 @@ const Current = endpoint(
   },
 );
 
+const Changes = former(
+  "the incremental game state",
+  ({ room, game, since, cursors }, { update, author, cursor, nextCursor, targets }) => where(
+    MinesweeperPlaying._updates({ game, since }).is({ update }),
+  ).form({
+    update,
+    annotations: each(RoomJoining._activeParticipants({ room }).is({ participant: author }))
+      .where(
+        compute(computations.annotationCursor, { cursors, author }, cursor),
+        concepts.Annotating._sync({ user: author, since: cursor }).is({ cursor: nextCursor, targets }),
+      )
+      .form({ participant: author, cursor: nextCursor, targets }),
+  }),
+);
+
+const Updates = endpoint(
+  "/game/updates",
+  ({ session, game: knownGame, since, cursors, participant, room, game, effectiveSince, effectiveCursors }) =>
+    receive({ session, game: knownGame, since, cursors })
+      .then(Sessioning.current({ session }).responds({ subject: participant }))
+      .then(
+        where(
+          ActiveRoom({ participant }).is({ room }),
+          CurrentGame({ room }).is({ game }),
+          compute(computations.boardSince, { knownGame, game, since }, effectiveSince),
+          compute(computations.boardCursors, { knownGame, game, cursors }, effectiveCursors),
+        )
+          .then(respond({ game, changes: Changes({ room, game, since: effectiveSince, cursors: effectiveCursors }) }))
+          .named("current-updates"),
+        where(ActiveRoom({ participant }).is({ room }), no(CurrentGame({ room })))
+          .then(respond({ game: null, changes: null })).named("no-game"),
+        where(no(RoomJoining._getParticipant({ participant }).is({ active: true })))
+          .then(respond({ error: "PARTICIPANT_NOT_ACTIVE" })).named("inactive"),
+        where(RoomJoining._getParticipant({ participant }).is({ active: true }), no(ActiveRoom({ participant })))
+          .then(respond({ error: "ROOM_NOT_OPEN" })).named("room-unavailable"),
+      ),
+  {
+    input: { required: ["session", "game", "since", "cursors"] },
+    validators: { input: input("updates") },
+  },
+);
+
 export const composition = {
   ActiveRoom, CurrentGame, PlayableGame, Snapshot,
-  Start, Reveal, Flag, Chord, Current,
+  Start, Reveal, Flag, Chord, Current, BoardChanges, Changes, Updates,
 };

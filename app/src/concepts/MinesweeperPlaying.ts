@@ -10,6 +10,28 @@ export type Status = "IDLE" | "PLAYING" | "WON" | "LOST";
 export interface Coordinate { row: number; column: number; }
 export interface Settings { height: number; width: number; mines: number; }
 
+export interface VisibleCell {
+  coord: Coordinate;
+  revealed: boolean;
+  flagged: boolean;
+  adjacent?: number;
+  mine?: boolean;
+  triggered?: boolean;
+}
+
+export interface BoardUpdate {
+  revision: number;
+  reset: boolean;
+  settings: Settings;
+  status: Status;
+  clicks: number;
+  flagsRemaining: number;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  cells: (VisibleCell & { id: number })[];
+  results: { time: number; bv: number; clicks: number; speed: number; efficiency: number }[] | null;
+}
+
 interface GameDocument {
   _id: string;
   settings: Settings;
@@ -19,6 +41,7 @@ interface GameDocument {
   revealed: number[];
   flagged: number[];
   clicks: number;
+  cellRevisions?: number[];
   startedAt?: Date;
   endedAt?: Date;
 }
@@ -53,6 +76,7 @@ export class MinesweeperPlayingConcept {
       revealed: [],
       flagged: [],
       clicks: 0,
+      cellRevisions: Array(height * width).fill(0),
     });
 
     return { game };
@@ -95,7 +119,7 @@ export class MinesweeperPlayingConcept {
     }
 
     document.clicks++;
-    await this.#save(document);
+    await this.#save(document, [cell]);
     return {};
   }
 
@@ -139,73 +163,61 @@ export class MinesweeperPlayingConcept {
     const document = await this.games.findOne({ _id: game });
     if (!document) return [];
 
-    const finished = document.status === "WON" || document.status === "LOST";
+    return this.#visible(document, Array.from(
+      { length: document.settings.height * document.settings.width }, (_, id) => id,
+    )).map(({ id, ...cell }) => cell);
+  }
 
-    const cells: {
-      coord: Coordinate;
-      revealed: boolean;
-      flagged: boolean;
-      adjacent?: number;
-      mine?: boolean;
-      triggered?: boolean;
-    }[] = [];
-
+  async _updates({ game, since }: { game: string; since: number }) {
+    const document = await this.games.findOne({ _id: game });
+    if (!document) return [];
+    const revision = document.clicks;
     const total = document.settings.height * document.settings.width;
-
-    for (let cell = 0; cell < total; cell++) {
-      const revealed = document.revealed.includes(cell);
-      const mine = document.mines.includes(cell);
-
-      const visible: (typeof cells)[number] = {
-        coord: {
-          row: Math.floor(cell / document.settings.width),
-          column: cell % document.settings.width,
-        },
-        revealed,
-        flagged: document.flagged.includes(cell),
-      };
-
-      if (revealed && !mine) {
-        visible.adjacent = this.#adjacent(document, cell);
-      }
-
-      if (finished && mine) {
-        visible.mine = true;
-        visible.triggered = revealed;
-      }
-
-      cells.push(visible);
+    const reset = since === -1 || !Number.isSafeInteger(since) ||
+      since < 0 || since > revision || !document.cellRevisions;
+    const ids: number[] = [];
+    for (let id = 0; id < total; id++) {
+      if (reset || document.cellRevisions![id]! > since!) ids.push(id);
     }
+    const update: BoardUpdate = {
+      revision, reset, settings: document.settings, status: document.status,
+      clicks: document.clicks,
+      flagsRemaining: document.settings.mines - document.flagged.length,
+      startedAt: document.startedAt ?? null, endedAt: document.endedAt ?? null,
+      cells: this.#visible(document, ids), results: reset || since < revision ? this.#result(document) : null,
+    };
+    return [{ update }];
+  }
 
-    return cells;
+  #visible(document: GameDocument, ids: number[]): BoardUpdate["cells"] {
+    if (!ids.length) return [];
+    const mines = new Set(document.mines);
+    const revealed = new Set(document.revealed);
+    const flagged = new Set(document.flagged);
+    const finished = document.status === "WON" || document.status === "LOST";
+    return ids.map(id => ({
+      id,
+      coord: { row: Math.floor(id / document.settings.width), column: id % document.settings.width },
+      revealed: revealed.has(id), flagged: flagged.has(id),
+      ...(revealed.has(id) && !mines.has(id)
+        ? { adjacent: this.#adjacent(document, id, mines) } : {}),
+      ...(finished && mines.has(id) ? { mine: true, triggered: revealed.has(id) } : {}),
+    }));
   }
 
   async _getResult({ game }: { game: string }) {
     const document = await this.games.findOne({ _id: game });
 
-    if (
-      !document ||
-      (document.status !== "WON" && document.status !== "LOST")
-    ) {
-      return [];
-    }
+    return document ? this.#result(document) : [];
+  }
 
-    if (!document.startedAt || !document.endedAt) return [];
-
-    const time =
-      (document.endedAt.getTime() - document.startedAt.getTime()) / 1000;
-
+  #result(document: GameDocument): NonNullable<BoardUpdate["results"]> {
+    if ((document.status !== "WON" && document.status !== "LOST") ||
+        !document.startedAt || !document.endedAt) return [];
+    const time = (document.endedAt.getTime() - document.startedAt.getTime()) / 1000;
     if (time <= 0) return [];
-
     const { bv, solved } = this.#measureBV(document);
-
-    return [{
-      time,
-      bv,
-      clicks: document.clicks,
-      speed: solved / time,
-      efficiency: solved / document.clicks,
-    }];
+    return [{ time, bv, clicks: document.clicks, speed: solved / time, efficiency: solved / document.clicks }];
   }
 
   // Checks the requirements shared by every move
@@ -232,9 +244,12 @@ export class MinesweeperPlayingConcept {
     now: Date,
   ): Promise<{ status: Status }> {
     document.clicks++;
-    this.#revealCells(document, targets);
+    const changed = this.#revealCells(document, targets);
     this.#finish(document, now);
-    await this.#save(document);
+    if (document.status === "WON" || document.status === "LOST") {
+      changed.push(...document.mines);
+    }
+    await this.#save(document, changed);
     return { status: document.status };
   }
 
@@ -265,9 +280,9 @@ export class MinesweeperPlayingConcept {
     return neighbors;
   }
 
-  #adjacent(document: GameDocument, cell: number) {
+  #adjacent(document: GameDocument, cell: number, mines = new Set(document.mines)) {
     return this.#neighbors(document, cell)
-      .filter(item => document.mines.includes(item))
+      .filter(item => mines.has(item))
       .length;
   }
 
@@ -294,6 +309,7 @@ export class MinesweeperPlayingConcept {
     const flagged = new Set(document.flagged);
     const revealed = new Set(document.revealed);
     const pending = [...targets];
+    const changed: number[] = [];
 
     while (pending.length > 0) {
       const cell = pending.pop()!;
@@ -301,17 +317,20 @@ export class MinesweeperPlayingConcept {
       if (flagged.has(cell) || revealed.has(cell)) continue;
 
       revealed.add(cell);
+      changed.push(cell);
 
-      if (!mines.has(cell) && this.#adjacent(document, cell) === 0) {
+      if (!mines.has(cell) && this.#adjacent(document, cell, mines) === 0) {
         pending.push(...this.#neighbors(document, cell));
       }
     }
 
     document.revealed = [...revealed];
+    return changed;
   }
 
   #finish(document: GameDocument, now: Date) {
-    if (document.revealed.some(cell => document.mines.includes(cell))) {
+    const mines = new Set(document.mines);
+    if (document.revealed.some(cell => mines.has(cell))) {
       document.status = "LOST";
       document.endedAt = now;
     } else if (
@@ -324,11 +343,20 @@ export class MinesweeperPlayingConcept {
     }
   }
 
-  async #save(document: GameDocument) {
-    await this.games.replaceOne({ _id: document._id }, document);
+  async #save(document: GameDocument, changed: number[]) {
+    const previous = document.clicks - 1;
+    document.cellRevisions ??= Array(document.settings.height * document.settings.width).fill(previous);
+    for (const id of changed) document.cellRevisions[id] = document.clicks;
+    // Compare-and-swap prevents simultaneous moves from overwriting one another.
+    const result = await this.games.replaceOne({ _id: document._id, clicks: previous }, document);
+    if (result.matchedCount === 0) {
+      throw new MoveNotAllowed("That move is not allowed in the current game state.");
+    }
   }
 
   #measureBV(document: GameDocument) {
+    const mines = new Set(document.mines);
+    const revealed = new Set(document.revealed);
     const visited = new Set<number>();
     const boundary = new Set<number>();
     const total = document.settings.height * document.settings.width;
@@ -337,9 +365,9 @@ export class MinesweeperPlayingConcept {
 
     for (let cell = 0; cell < total; cell++) {
       if (
-        document.mines.includes(cell) ||
+        mines.has(cell) ||
         visited.has(cell) ||
-        this.#adjacent(document, cell) !== 0
+        this.#adjacent(document, cell, mines) !== 0
       ) {
         continue;
       }
@@ -353,15 +381,15 @@ export class MinesweeperPlayingConcept {
         if (visited.has(zero)) continue;
 
         visited.add(zero);
-        if (document.revealed.includes(zero)) opened = true;
+        if (revealed.has(zero)) opened = true;
 
         for (const neighbor of this.#neighbors(document, zero)) {
           if (
-            this.#adjacent(document, neighbor) === 0 &&
-            !document.mines.includes(neighbor)
+            this.#adjacent(document, neighbor, mines) === 0 &&
+            !mines.has(neighbor)
           ) {
             if (!visited.has(neighbor)) pending.push(neighbor);
-          } else if (!document.mines.includes(neighbor)) {
+          } else if (!mines.has(neighbor)) {
             boundary.add(neighbor);
           }
         }
@@ -372,12 +400,12 @@ export class MinesweeperPlayingConcept {
 
     for (let cell = 0; cell < total; cell++) {
       if (
-        !document.mines.includes(cell) &&
+        !mines.has(cell) &&
         !visited.has(cell) &&
         !boundary.has(cell)
       ) {
         bv++;
-        if (document.revealed.includes(cell)) solved++;
+        if (revealed.has(cell)) solved++;
       }
     }
 

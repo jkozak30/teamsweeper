@@ -84,6 +84,12 @@ export const applicationConceptSet = conceptSet({
   Sessioning: sessioning,
   Annotating: annotating,
 }, {
+  boardCursors: ({ knownGame, game, cursors }: { knownGame: string; game: string; cursors: Record<string, string> }) =>
+    knownGame === game ? cursors : {},
+  boardSince: ({ knownGame, game, since }: { knownGame: string; game: string; since: number }) =>
+    knownGame === game ? since : -1,
+  annotationCursor: ({ cursors, author }: { cursors: Record<string, string>; author: string }) =>
+    cursors[author] ?? "",
   gameCell: ({ game, coord }: {
     game: string;
     coord: { row: number; column: number };

@@ -15,10 +15,12 @@ const props = defineProps<{
   snapshot: Snapshot;
   isHost: boolean;
   busy: boolean;
+  boardBusy: boolean;
   participant: string;
   players: { participant: string; name: string }[];
   colors: PlayerColors;
   pendingCell: string | null;
+  pendingCells: string[];
 }>();
 
 const settings = defineModel<Settings>("settings", {
@@ -70,12 +72,13 @@ function openSettings(event: Event) {
       <Board
         :width="snapshot.settings.width"
         :cells="snapshot.cells"
-        :busy="busy"
+        :busy="boardBusy"
         :finished="finished"
         :participant="participant"
         :players="players"
         :colors="colors"
         :pending-cell="pendingCell"
+        :pending-cells="pendingCells"
         @highlight="emit('highlight', $event)"
         @paint="emit('paint', $event)"
         @clear="emit('clear')"

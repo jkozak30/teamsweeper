@@ -209,3 +209,23 @@ test("simultaneous equivalent compound items create only one annotation", async 
 
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
 });
+
+test("sync cursors suppress unchanged targets and detect additions, removals, and clears", async () => {
+  const first = await annotating._sync({ user: "alice", since: "" });
+  expect(first.targets).toEqual([]);
+  expect((await annotating._sync({ user: "alice", since: first.cursor })).targets).toBeNull();
+
+  const item = { game: "g", coord: { row: 0, column: 1 } };
+  await annotating.highlight({ user: "alice", item });
+  const added = await annotating._sync({ user: "alice", since: first.cursor });
+  expect(added.targets).toEqual([item]);
+  expect(added.cursor).not.toBe(first.cursor);
+  const restored = new AnnotatingConcept(testDb.db);
+  expect((await restored._sync({ user: "alice", since: added.cursor })).targets).toBeNull();
+
+  await annotating.remove({ user: "alice", item });
+  expect((await annotating._sync({ user: "alice", since: added.cursor })).targets).toEqual([]);
+  await annotating.highlight({ user: "alice", item });
+  await annotating.clear({ user: "alice" });
+  expect((await annotating._sync({ user: "alice", since: added.cursor })).targets).toEqual([]);
+});

@@ -26,6 +26,15 @@ opaque Coordinate
 
 opaque Settings
   Board height, width, and mine count, each represented as a safe integer.
+
+opaque CellRevisions
+  An array of numeric revisions indexed by row times width plus column.
+
+opaque BoardUpdate
+  A visible update containing revision, reset, settings, status, clicks,
+  flagsRemaining, nullable timestamps, changed cells identified by numeric id
+  and coordinate, and completed-game results. Hidden mines and numbers are
+  absent until disclosure is permitted by the game rules.
 ```
 
 ## State
@@ -38,9 +47,13 @@ a set of Games with
   a revealed set of Coordinate
   a flagged set of Coordinate
   a clicks Number
+  a cellRevisions CellRevisions
   an optional startedAt DateTime
   an optional endedAt DateTime
 
+Rule: Each successful move increments clicks and uses that value as its revision.
+Rule: Each cell revision records its latest visible change.
+Rule: A concurrent write must not overwrite a move committed after its read.
 Rule: Height and width are positive safe integers.
 Rule: Height times width is a safe integer.
 Rule: Mine count is a positive safe integer smaller than height times width.
@@ -65,7 +78,7 @@ create(settings: Settings) : returns (game: Game)
   then
     create a game with the given settings and status IDLE
     initialize mines, revealed, and flagged as empty sets
-    set clicks to zero and leave both timestamps absent
+    set clicks and every cell revision to zero and leave both timestamps absent
     returns game
 
 reveal(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)
@@ -84,6 +97,8 @@ reveal(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)
     otherwise, if coord has no adjacent mines, expand through adjacent unflagged zero cells and reveal their unflagged numbered boundary cells
     automatic expansion does not increment clicks and never reveals flagged cells
     if no mine was revealed and every safe cell is revealed, set status to WON and endedAt to now
+    record the new revision for newly revealed cells and for mines disclosed at completion
+    commit only if no intervening move changed the game; otherwise refuse MOVE_NOT_ALLOWED
     returns status
 
 flag(game: Game, coord: Coordinate, value: Flag) : returns ()
@@ -98,6 +113,8 @@ flag(game: Game, coord: Coordinate, value: Flag) : returns ()
     if value is true, add coord to flagged
     otherwise remove coord from flagged
     increment clicks by one
+    record the new revision for coord
+    commit only if no intervening move changed the game; otherwise refuse MOVE_NOT_ALLOWED
     returns
 
 chord(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)
@@ -114,12 +131,24 @@ chord(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)
     these reveals do not increment clicks
     if any mine is revealed, set status to LOST and endedAt to now
     otherwise, if every safe cell is revealed, set status to WON and endedAt to now
+    record the new revision for newly revealed cells and for mines disclosed at completion
+    commit only if no intervening move changed the game; otherwise refuse MOVE_NOT_ALLOWED
     returns status
 ```
 
 ## Queries
 
 ```queries
+_updates(game: Game, since: Number) : optional (update: BoardUpdate)
+  Returns no row for a missing game. Otherwise reads one committed game state.
+  A -1, future, or unusable revision returns reset true and all visible cells.
+  Otherwise reset is false and cells contains only cells changed after since,
+  ordered by numeric id. Revision is the committed click count. An up-to-date
+  read contains no cells. Results is null when the revision is unchanged,
+  meaning keep the previously received results without recalculation.
+  Otherwise results is computed from the same committed state as the cells.
+  Legacy games lacking cell revisions return a full reset until their next move.
+
 _getGame(game: Game) : optional (settings: Settings, status: Status, clicks: Number, flagsRemaining: Number, startedAt?: DateTime, endedAt?: DateTime)
   Returns no row if the game does not exist.
   Otherwise returns settings, status, clicks, timestamps when present,

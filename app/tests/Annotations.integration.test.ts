@@ -31,6 +31,10 @@ async function post(
   body: Record<string, unknown> = {},
   cookie?: string,
 ) {
+  if (["game/reveal", "game/flag", "game/chord"].includes(path)) {
+    body = { since: 0, ...body };
+  }
+
   const response = await api(new Request(`${origin}/api/${path}`, {
     method: "POST",
     headers: {

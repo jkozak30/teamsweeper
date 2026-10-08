@@ -12,8 +12,9 @@ const {
   settings,
   status,
   busy,
-  boardPending,
+  controlsPending,
   pendingCell,
+  pendingCells,
   syncProblem,
   isHost,
   colors,
@@ -48,7 +49,7 @@ const layoutWidth = computed(() => {
       :lobby="lobby"
       :colors="colors"
       :screen="screen"
-      :busy="busy || boardPending"
+      :busy="busy || controlsPending"
       @create="createRoom"
       @join="joinRoom"
     />
@@ -58,7 +59,7 @@ const layoutWidth = computed(() => {
         <p>
           Code: <strong>{{ lobby.code }}</strong>
           <button
-            :disabled="busy || boardPending"
+            :disabled="busy || controlsPending"
             @click="copyCode"
           >
             Copy code
@@ -72,7 +73,7 @@ const layoutWidth = computed(() => {
           :colors="colors"
           :is-host="isHost"
           :has-game="!!gameState?.snapshot"
-          :busy="busy || boardPending"
+          :busy="busy || controlsPending"
           @start="startGame"
           @return="screen = 'game'"
           @leave="leaveRoom"
@@ -86,8 +87,10 @@ const layoutWidth = computed(() => {
           :players="lobby.members.participants"
           :colors="colors"
           :is-host="isHost"
-          :busy="busy || boardPending || syncProblem"
+          :busy="busy || controlsPending || syncProblem"
           :pending-cell="pendingCell"
+          :pending-cells="pendingCells"
+          :board-busy="busy || syncProblem"
           @reveal="move('reveal', $event)"
           @flag="(coord, value) => move('flag', coord, value)"
           @chord="move('chord', $event)"

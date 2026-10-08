@@ -17,6 +17,12 @@ external User
 
 external Item
   The target of a highlight.
+
+opaque Cursors
+  A record mapping user identities to content cursor strings.
+
+opaque Targets
+  A nullable sequence of Item identities. Null means unchanged.
 ```
 
 ## State
@@ -60,6 +66,13 @@ clear(user: User) : returns ()
 ## Queries
 
 ```queries
+_sync(user: User, since: String) : one (cursor: String, targets: Targets)
+  An empty since string requests the initial list.
+  Returns a content cursor for the user's canonical target list, ordered as
+  _byUser. If since matches, targets is null. Otherwise targets is the complete
+  current list; an empty list removes all cached highlights for that user.
+  The cursor is a change detector, not an authorization credential.
+
 _forItem(item: Item) : many (author: User)
   Returns the authors highlighting the given item, ordered by author identity.
   Returns no rows when the item has no highlights.

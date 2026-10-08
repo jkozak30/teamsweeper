@@ -6,6 +6,9 @@ import {
 import { openTestDb, type TestDb } from "./test-db.ts";
 import { minePicker, withMinePlacement } from "./mine-picker.ts";
 
+import { applyBoard, applyAnnotations, type BoardUpdate, type AnnotationCache } from "../web/sync.ts";
+import { createActionQueue } from "../web/action-queue.ts";
+
 interface FixtureDocument {
   _id: string;
   settings: Settings;
@@ -373,4 +376,165 @@ test("results omit zero-duration games and state survives a new instance", async
 
   expect(await restored._getGame({ game })).toEqual(await playing._getGame({ game }));
   expect(await restored._visibleCells({ game })).toEqual(await playing._visibleCells({ game }));
+});
+
+test("revision reads reset once, return only changed cells, and catch up after missed moves", async () => {
+  const { game } = await playing.create({ settings: { height: 30, width: 30, mines: 10 } });
+  const initial = (await playing._updates({ game, since: -1 }))[0]!.update;
+  expect(initial.reset).toBe(true);
+  expect(initial.revision).toBe(0);
+  expect(initial.cells).toHaveLength(900);
+  expect((await playing._updates({ game, since: 0 }))[0]!.update.cells).toEqual([]);
+
+  await playing.flag({ game, coord: coord(0, 0), value: true });
+  await playing.flag({ game, coord: coord(0, 1), value: true });
+  await playing.flag({ game, coord: coord(0, 0), value: false });
+
+  const caughtUp = (await playing._updates({ game, since: 0 }))[0]!.update;
+  expect(caughtUp.reset).toBe(false);
+  expect(caughtUp.revision).toBe(3);
+  expect(caughtUp.cells.map(cell => [cell.id, cell.flagged])).toEqual([[0, false], [1, true]]);
+  expect(caughtUp.flagsRemaining).toBe(9);
+  expect((await playing._updates({ game, since: 3 }))[0]!.update.cells).toEqual([]);
+  expect((await playing._updates({ game, since: 99 }))[0]!.update.reset).toBe(true);
+});
+
+test("reveal deltas conceal hidden contents and include all mines at completion", async () => {
+  const game = await fixture(3, 3, [0, 8], [1]);
+  const opening = (await playing._updates({ game, since: 0 }))[0]!.update;
+  expect(opening.cells.map(cell => cell.id)).toEqual([1]);
+  expect(opening.cells[0]!.adjacent).toBe(1);
+  for (const cell of opening.cells) expect(cell).not.toHaveProperty("mine");
+
+  await playing.reveal({ game, coord: coord(0, 0), now: end });
+  const loss = (await playing._updates({ game, since: 1 }))[0]!.update;
+  expect(loss.status).toBe("LOST");
+  expect(loss.cells.map(cell => [cell.id, cell.mine, cell.triggered])).toEqual([
+    [0, true, true], [8, true, false],
+  ]);
+});
+
+test("sparse expansion deltas reproduce the full visible board and persist across instances", async () => {
+  const game = await fixture(30, 30, [0], [1]);
+  const before = (await playing._updates({ game, since: -1 }))[0]!.update;
+  await playing.reveal({ game, coord: coord(29, 29), now: end });
+  const restored = new MinesweeperPlayingConcept(testDb.db);
+  const after = (await restored._updates({ game, since: before.revision }))[0]!.update;
+  const cells = [...before.cells];
+  for (const cell of after.cells) cells[cell.id] = cell;
+  expect(cells.map(({ id, ...cell }) => cell)).toEqual(await playing._visibleCells({ game }));
+  expect(after.status).toBe("WON");
+  expect(after.results).toHaveLength(1);
+  expect((await playing._updates({ game, since: after.revision }))[0]!.update.results).toBeNull();
+});
+
+test("simultaneous moves across instances never overwrite a successful move", async () => {
+  const { game } = await playing.create({ settings: { height: 3, width: 3, mines: 1 } });
+  const other = new MinesweeperPlayingConcept(testDb.db);
+  const results = await Promise.allSettled([
+    playing.flag({ game, coord: coord(0, 0), value: true }),
+    other.flag({ game, coord: coord(0, 1), value: true }),
+  ]);
+  const successes = results.filter(result => result.status === "fulfilled").length;
+  const update = (await playing._updates({ game, since: 0 }))[0]!.update;
+  expect(update.clicks).toBe(successes);
+  expect(update.cells).toHaveLength(successes);
+  for (const [id, result] of results.entries()) {
+    if (result.status === "fulfilled") expect(update.cells.find(cell => cell.id === id)?.flagged).toBe(true);
+    else expect(result.reason).toBeInstanceOf(MoveNotAllowed);
+  }
+});
+
+test("legacy games reset safely and refused moves do not advance revisions", async () => {
+  const { game } = await playing.create({ settings: { height: 3, width: 3, mines: 1 } });
+  await testDb.db.collection("minesweeperPlaying.games").updateOne(
+    { _id: game } as never, { $unset: { cellRevisions: "" } },
+  );
+  expect((await playing._updates({ game, since: 0 }))[0]!.update.reset).toBe(true);
+  await playing.flag({ game, coord: coord(0, 0), value: true });
+  await expect(playing.flag({ game, coord: coord(0, 0), value: true })).rejects.toBeInstanceOf(MoveNotAllowed);
+  const update = (await playing._updates({ game, since: 1 }))[0]!.update;
+  expect(update.revision).toBe(1);
+  expect(update.reset).toBe(false);
+  expect(update.cells).toEqual([]);
+});
+
+// Client display and input behavior for MinesweeperPlaying.
+function update(overrides: Partial<BoardUpdate> = {}): BoardUpdate {
+  return {
+    revision: 0, reset: true, settings: { height: 1, width: 2, mines: 1 },
+    status: "IDLE", clicks: 0, flagsRemaining: 1, startedAt: null, endedAt: null,
+    results: [],
+    cells: [0, 1].map(id => ({ id, coord: { row: 0, column: id }, revealed: false, flagged: false })),
+    ...overrides,
+  };
+}
+
+test("the frontend merges deltas without discarding unchanged cells or highlights", () => {
+  const initial = applyBoard(null, "g", update());
+  initial.snapshot!.cells[1]!.highlights = [{ participant: "alice" }];
+  const flagged = applyBoard(initial, "g", update({
+    reset: false, revision: 1, clicks: 1, flagsRemaining: 0,
+    cells: [{ id: 0, coord: { row: 0, column: 0 }, revealed: false, flagged: true }],
+  }));
+  expect(flagged.snapshot!.cells[0]!.flagged).toBe(true);
+  expect(flagged.snapshot!.cells[1]).toBe(initial.snapshot!.cells[1]);
+  expect(flagged.snapshot!.cells[1]!.highlights).toEqual([{ participant: "alice" }]);
+  expect(() => applyBoard(null, "g", update({ reset: false, cells: [] }))).toThrow("RESET_REQUIRED");
+});
+
+test("annotation sync handles unchanged cursors, clears, departures, and replaced games", () => {
+  const cache: AnnotationCache = new Map();
+  const initial = applyBoard(null, "g", update());
+  const highlighted = applyAnnotations(initial, [{
+    participant: "alice", cursor: "a", targets: [{ game: "g", coord: { row: 0, column: 1 } }],
+  }], cache);
+  expect(highlighted.snapshot!.cells[1]!.highlights).toEqual([{ participant: "alice" }]);
+  const unchanged = applyAnnotations(highlighted, [{ participant: "alice", cursor: "a", targets: null }], cache);
+  expect(unchanged.snapshot!.cells[1]).toBe(highlighted.snapshot!.cells[1]);
+  const replaced = applyBoard(null, "new", update());
+  expect(applyAnnotations(replaced, [{ participant: "alice", cursor: "a", targets: null }], cache)
+    .snapshot!.cells[1]!.highlights).toEqual([]);
+  expect(applyAnnotations(highlighted, [{ participant: "alice", cursor: "b", targets: [] }], cache)
+    .snapshot!.cells[1]!.highlights).toEqual([]);
+  expect(applyAnnotations(highlighted, [], cache).snapshot!.cells[1]!.highlights).toEqual([]);
+});
+
+test("unchanged results retain the already displayed completion statistics", () => {
+  const result = { time: 10, bv: 1, clicks: 1, speed: 0.1, efficiency: 1 };
+  const completed = applyBoard(null, "g", update({ status: "WON", results: [result] }));
+  const unchanged = applyBoard(completed, "g", update({ reset: false, status: "WON", cells: [], results: null }));
+  expect(unchanged.snapshot!.results).toEqual([result]);
+});
+
+test("clicks are acknowledged immediately, execute in order, and obey a queue bound", async () => {
+  let pending: (string | null)[] = [];
+  let release!: () => void;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  const events: string[] = [];
+  const queue = createActionQueue(() => true, value => { pending = value; }, 2);
+  const first = queue.enqueue(async () => { events.push("first"); await wait; }, "0,0");
+  const second = queue.enqueue(async () => { events.push("second"); }, "0,1");
+  expect(pending).toEqual(["0,0", "0,1"]);
+  expect(queue.enqueue(async () => {}, "0,2")).toBeNull();
+  await Promise.resolve();
+  expect(events).toEqual(["first"]);
+  release();
+  await Promise.all([first, second]);
+  expect(events).toEqual(["first", "second"]);
+  expect(pending).toEqual([]);
+});
+
+test("queued actions stop after disconnection and a failure does not poison later input", async () => {
+  let available = true;
+  let executed = false;
+  const queue = createActionQueue(() => available, () => {});
+  const first = queue.enqueue(async () => { available = false; throw new Error("offline"); });
+  const second = queue.enqueue(async () => { executed = true; });
+  await expect(first!).rejects.toThrow("offline");
+  await second;
+  expect(executed).toBe(false);
+  available = true;
+  await queue.enqueue(async () => { executed = true; });
+  expect(executed).toBe(true);
 });
