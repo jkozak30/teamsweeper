@@ -128,9 +128,3 @@ function openSettings(event: Event) {
     </button>
   </section>
 </template>
-
-<style scoped>
-.board-container {
-  overflow-x: auto;
-}
-</style>

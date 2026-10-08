@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import Sidebar from "./components/Sidebar.vue";
 import LobbyView from "./components/Lobby.vue";
 import GameView from "./components/Game.vue";
@@ -27,10 +28,22 @@ const {
   clearHighlights,
   copyCode,
 } = useTeamsweeperController();
+
+const layoutWidth = computed(() => {
+  const snapshot = gameState.value?.snapshot;
+
+  if (screen.value !== "game" || !snapshot) return "40rem";
+
+  const columns = snapshot.settings.width;
+  const gaps = Math.max(0, columns - 1) * 2;
+
+  // Sidebar + layout gap + board cells + board gaps.
+  return `max(40rem, calc(16rem + ${columns * 2}rem + ${gaps}px))`;
+});
 </script>
 
 <template>
-  <div class="layout">
+  <div class="layout" :style="{ width: layoutWidth }">
     <Sidebar
       :lobby="lobby"
       :colors="colors"
@@ -103,8 +116,13 @@ const {
 .layout {
   display: grid;
   grid-template-columns: 14rem minmax(0, 1fr);
+  max-width: calc(100vw - 2rem);
   gap: 2rem;
   align-items: start;
+}
+
+main {
+  min-width: 0;
 }
 
 @media (max-width: 650px) {
