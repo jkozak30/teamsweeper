@@ -28,9 +28,9 @@ Defined in [Annotating](../design/concepts/Annotating.md), line 1.
 
 #### Instances
 
-- `Annotating` — instance of `Annotating` — [Application types](../design/types.md), line 21.
-  - `Item` is `GameCell` — [Application types](../design/types.md), line 23.
-  - `User` is `RoomJoining.Participant` — [Application types](../design/types.md), line 22.
+- `Annotating` — instance of `Annotating` — [Application types](../design/types.md), line 27.
+  - `Item` is `GameCell` — [Application types](../design/types.md), line 29.
+  - `User` is `RoomJoining.Participant` — [Application types](../design/types.md), line 28.
 
 ### MinesweeperPlaying
 
@@ -59,7 +59,30 @@ Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 
 
 #### Instances
 
-- `MinesweeperPlaying` — instance of `MinesweeperPlaying` — [Application types](../design/types.md), line 13.
+- `MinesweeperPlaying` — instance of `MinesweeperPlaying` — [Application types](../design/types.md), line 19.
+
+### PerformanceRanking
+
+Defined in [PerformanceRanking](../design/concepts/PerformanceRanking.md), line 1.
+
+#### Actions
+
+- `record(item: Item, scope: Scope, category: Category, measurements: Measurements) : returns ()`
+  - Refuses `INVALID_RESULT`: Use valid identities, a category, and nonempty finite measurements with distinct metrics.
+  - Refuses `RESULT_ALREADY_RECORDED`: That item already has a recorded result.
+
+#### Queries
+
+- `_rank(scope: Scope, category?: Category, metric: Metric, ascending: Flag, from?: Number, to?: Number) : many (item: Item, value: Number, rank: Number)`
+- `_get(item: Item) : optional (scope: Scope, category: Category, measurements: Measurements)`
+
+#### Instances
+
+- `PerformanceRanking` — instance of `PerformanceRanking` — [Application types](../design/types.md), line 31.
+  - `Category` is `GameCategory` — [Application types](../design/types.md), line 34.
+  - `Item` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 32.
+  - `Metric` is `RankingMetric` — [Application types](../design/types.md), line 35.
+  - `Scope` is `RoomJoining.Room` — [Application types](../design/types.md), line 33.
 
 ### RoomJoining
 
@@ -86,8 +109,8 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
 
 #### Instances
 
-- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 15.
-  - `Game` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 16.
+- `RoomJoining` — instance of `RoomJoining` — [Application types](../design/types.md), line 21.
+  - `Game` is `MinesweeperPlaying.Game` — [Application types](../design/types.md), line 22.
 
 ### Sessioning
 
@@ -107,14 +130,16 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Instances
 
-- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 18.
-  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 19.
+- `Sessioning` — instance of `Sessioning` — [Application types](../design/types.md), line 24.
+  - `Subject` is `RoomJoining.Participant` — [Application types](../design/types.md), line 25.
 
 ## Application types
 
 Concrete types:
 
+- `GameCategory` — [Application types](../design/types.md), line 11.
 - `GameCell` — [Application types](../design/types.md), line 7.
+- `RankingMetric` — [Application types](../design/types.md), line 14.
 
 ## Computations
 
@@ -122,6 +147,9 @@ Concrete types:
 - `boardCursors(knownGame: String, game: MinesweeperPlaying.Game, cursors: Annotating.Cursors) : Annotating.Cursors` — [Game](../design/compositions/Game.md), line 64.
 - `boardSince(knownGame: String, game: MinesweeperPlaying.Game, since: Number) : Number` — [Game](../design/compositions/Game.md), line 61.
 - `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 30.
+- `rankingCategory(category: GameCategory | String | null) : GameCategory | String | undefined` — [Rankings](../design/compositions/Rankings.md), line 26.
+- `resultCategory(settings: MinesweeperPlaying.Settings, status: MinesweeperPlaying.Status) : PerformanceRanking.Category` — [Rankings](../design/compositions/Rankings.md), line 29.
+- `resultMeasurements(time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number) : PerformanceRanking.Measurements` — [Rankings](../design/compositions/Rankings.md), line 32.
 
 ## Views
 
@@ -260,6 +288,21 @@ Former "the incremental game state" — inputs (room, game, since, cursors); bin
         participant: author
         targets
     update
+```
+
+### the room's ranked results
+
+Authored path: `Rankings.Ranked`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 9.
+
+```former
+Former "the room's ranked results" — inputs (room, category, metric, ascending, from, to); bindings (item, value, rank); promises exactly one record — forms:
+  a record of
+    results: each PerformanceRanking._rank (ascending, category, from, metric, scope: room, to) has (item, rank, value)
+      form a record of
+        item
+        rank
+        value
 ```
 
 ### the visible game state
@@ -1151,6 +1194,176 @@ then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
 
+### Rankings.Rank
+
+Authored path: `Rankings.Rank`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 7.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 21.
+
+```reaction
+when RequestBoundary.request (ascending, category, from, metric, path: "/rankings/rank", requestId, session, to)
+then
+  Sessioning.current (session)
+```
+
+### Rankings.Rank:inactive#2
+
+Authored path: `Rankings.Rank`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 7.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Rank
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (ascending, category, from, metric, path: "/rankings/rank", requestId, session, to)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Rankings.Rank:member-ranks#2
+
+Authored path: `Rankings.Rank`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 7.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Rank
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  earlier, RequestBoundary.request (ascending, category, from, metric, path: "/rankings/rank", requestId, session, to)
+  effectiveCategory is rankingCategory (category)
+then
+  RequestBoundary.respond (ranking: former "the room's ranked results" with (ascending, category: effectiveCategory, from, metric, room, to), requestId)
+```
+
+### Rankings.Rank:room-unavailable#2
+
+Authored path: `Rankings.Rank`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 7.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 21.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Rank
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (ascending, category, from, metric, path: "/rankings/rank", requestId, session, to)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
+### Rankings.RecordChord
+
+Authored path: `Rankings.RecordChord`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 3.
+
+```reaction
+when MinesweeperPlaying.chord (coord, game, now, status: "WON")
+where
+  earlier, Sessioning.current (subject: participant)
+  RoomJoining._getParticipant (participant) has (room)
+  MinesweeperPlaying._getGame (game) has (settings)
+  MinesweeperPlaying._getResult (game) has (bv, clicks, efficiency, speed, time)
+  category is resultCategory (settings, status: "WON")
+  measurements is resultMeasurements (bv, clicks, efficiency, speed, time)
+then
+  PerformanceRanking.record (category, item: game, measurements, scope: room)
+```
+
+### Rankings.RecordReveal
+
+Authored path: `Rankings.RecordReveal`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 3.
+
+```reaction
+when MinesweeperPlaying.reveal (coord, game, now, status: "WON")
+where
+  earlier, Sessioning.current (subject: participant)
+  RoomJoining._getParticipant (participant) has (room)
+  MinesweeperPlaying._getGame (game) has (settings)
+  MinesweeperPlaying._getResult (game) has (bv, clicks, efficiency, speed, time)
+  category is resultCategory (settings, status: "WON")
+  measurements is resultMeasurements (bv, clicks, efficiency, speed, time)
+then
+  PerformanceRanking.record (category, item: game, measurements, scope: room)
+```
+
+### Rankings.Result
+
+Authored path: `Rankings.Result`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 13.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 22.
+
+```reaction
+when RequestBoundary.request (item, path: "/rankings/result", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Rankings.Result:inactive#2
+
+Authored path: `Rankings.Result`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 13.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Result
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (item, path: "/rankings/result", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Rankings.Result:member-result#2
+
+Authored path: `Rankings.Result`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 13.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Result
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  earlier, RequestBoundary.request (item, path: "/rankings/result", requestId, session)
+  PerformanceRanking._get (item) has (category, measurements, scope: room)
+then
+  RequestBoundary.respond (item, requestId, result: (category, measurements))
+```
+
+### Rankings.Result:missing-or-other-room#2
+
+Authored path: `Rankings.Result`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 13.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Result
+where
+  view "the open room of active (participant)" with (participant) has (room)
+  earlier, RequestBoundary.request (item, path: "/rankings/result", requestId, session)
+  no PerformanceRanking._get (item) has (scope: room)
+then
+  RequestBoundary.respond (error: "RESULT_NOT_FOUND", requestId)
+```
+
+### Rankings.Result:room-unavailable#2
+
+Authored path: `Rankings.Result`.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 13.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 22.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rankings.Result
+where
+  RoomJoining._getParticipant (participant) has (active: true)
+  no view "the open room of active (participant)" with (participant)
+  earlier, RequestBoundary.request (item, path: "/rankings/result", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
+```
+
 ### Rooms.Create
 
 Authored path: `Rooms.Create`.
@@ -1355,6 +1568,8 @@ not listed here have no explicit input contract.
 - `/game/reveal` — requires `session`, `game`, `coord`, `since`
 - `/game/start` — requires `session`, `room`, `settings`
 - `/game/updates` — requires `session`, `game`, `since`, `cursors`
+- `/rankings/rank` — requires `session`, `metric`, `ascending`; fills `category` with null when absent; fills `from` with 1 when absent; fills `to` with 9007199254740991 when absent
+- `/rankings/result` — requires `session`, `item`
 - `/rooms/create` — requires `name`
 - `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`

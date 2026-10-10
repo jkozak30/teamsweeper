@@ -6,10 +6,12 @@ import { applicationConceptSet } from "../src/concepts.ts";
 import { composition as Rooms } from "../src/compositions/Rooms.ts";
 import { composition as Game } from "../src/compositions/Game.ts";
 import { composition as Annotations } from "../src/compositions/Annotations.ts";
+import { composition as Rankings } from "../src/compositions/Rankings.ts";
 import { RoomJoiningConcept } from "../src/concepts/RoomJoining.ts";
 import { SessioningConcept } from "../src/concepts/Sessioning.ts";
 import { MinesweeperPlayingConcept } from "../src/concepts/MinesweeperPlaying.ts";
 import { AnnotatingConcept } from "../src/concepts/Annotating.ts";
+import { PerformanceRankingConcept } from "../src/concepts/PerformanceRanking.ts";
 import { policy } from "../src/http.ts";
 
 export function createTestApp(db: Db, clock: () => Date = () => new Date()) {
@@ -22,8 +24,9 @@ export function createTestApp(db: Db, clock: () => Date = () => new Date()) {
       Sessioning: new SessioningConcept(db, clock),
       MinesweeperPlaying: new MinesweeperPlayingConcept(db),
       Annotating: new AnnotatingConcept(db),
+      PerformanceRanking: new PerformanceRankingConcept(db),
     },
-    composition: { Rooms, Game, Annotations },
+    composition: { Rooms, Game, Annotations, Rankings },
     rawFaultReporter: ({ error }) => console.error(error),
   });
 
@@ -33,5 +36,5 @@ export function createTestApp(db: Db, clock: () => Date = () => new Date()) {
     policy,
   });
 
-  return { api, rooms };
+  return { api, rooms, whenIdle: () => application.whenIdle() };
 }

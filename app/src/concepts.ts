@@ -7,6 +7,7 @@ import roomSpec from "@design/concepts/RoomJoining.md" with { type: "text" };
 import sessionSpec from "@design/concepts/Sessioning.md" with { type: "text" };
 import playingSpec from "@design/concepts/MinesweeperPlaying.md" with { type: "text" };
 import annotatingSpec from "@design/concepts/Annotating.md" with { type: "text" };
+import rankingSpec from "@design/concepts/PerformanceRanking.md" with { type: "text" };
 
 import {
   RoomJoiningConcept,
@@ -36,6 +37,20 @@ import {
   AlreadyHighlighted,
   HighlightNotFound,
 } from "./concepts/Annotating.ts";
+
+import {
+  PerformanceRankingConcept,
+  InvalidResult,
+  ResultAlreadyRecorded,
+} from "./concepts/PerformanceRanking.ts";
+
+const resultMetrics: Record<string, string> = {
+  time: "Time",
+  bv: "3BV",
+  clicks: "Clicks",
+  speed: "3BV/s",
+  efficiency: "Efficiency",
+};
 
 const roomJoining = registerConcept({
   class: RoomJoiningConcept,
@@ -78,12 +93,32 @@ const annotating = registerConcept({
   },
 });
 
+const performanceRanking = registerConcept({
+  class: PerformanceRankingConcept,
+  spec: rankingSpec,
+  refusals: {
+    INVALID_RESULT: InvalidResult,
+    RESULT_ALREADY_RECORDED: ResultAlreadyRecorded,
+  },
+});
+
 export const applicationConceptSet = conceptSet({
   MinesweeperPlaying: minesweeperPlaying,
   RoomJoining: roomJoining,
   Sessioning: sessioning,
   Annotating: annotating,
+  PerformanceRanking: performanceRanking,
 }, {
+  rankingCategory: ({ category }: { category: unknown }) => category ?? undefined,
+  resultCategory: ({ settings, status }: {
+    settings: { height: number; width: number; mines: number };
+    status: string;
+  }) => ({ settings, status }),
+  resultMeasurements: (result: { time: number; bv: number; clicks: number; speed: number; efficiency: number }) =>
+    Object.entries(result).map(([field, value]) => ({
+      metric: resultMetrics[field] ?? field,
+      value,
+    })),
   boardCursors: ({ knownGame, game, cursors }: { knownGame: string; game: string; cursors: Record<string, string> }) =>
     knownGame === game ? cursors : {},
   boardSince: ({ knownGame, game, since }: { knownGame: string; game: string; since: number }) =>
