@@ -118,11 +118,11 @@ export function useTeamsweeperController() {
   }
 
   function move(kind: "reveal" | "flag" | "chord", coord: Coordinate, value = false) {
-    return enqueue(() => performMove(kind, coord, value), coord);
+    return enqueue(() => performMove(kind, coord, value), kind === "flag" ? undefined : coord);
   }
 
   function toggleHighlight(coord: Coordinate) {
-    return enqueue(() => performToggleHighlight(coord), coord);
+    return enqueue(() => performToggleHighlight(coord));
   }
 
   function paintHighlights(coords: Coordinate[]) {

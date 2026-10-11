@@ -13,12 +13,13 @@ const props = defineProps<{
   width: number;
   cells: Cell[];
   busy: boolean;
+  pendingCells: string[];
   finished: boolean;
   participant: string;
   players: { participant: string; name: string }[];
   colors: PlayerColors;
-  pendingCell: string | null;
-  pendingCells: string[];
+  lost: boolean;
+  won: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -28,9 +29,11 @@ const emit = defineEmits<{
   highlight: [coord: Coordinate];
   paint: [coords: Coordinate[]];
   clear: [];
+  pressing: [value: boolean];
 }>();
 
 const dragging = ref(false);
+const pressed = ref<Coordinate | null>(null);
 const visited = ref(new Map<string, Coordinate>());
 const key = (coord: Coordinate) =>
   `${coord.row},${coord.column}`;
@@ -60,6 +63,10 @@ function flag(cell: Cell) {
 }
 
 function begin(cell: Cell, event: PointerEvent) {
+  if (event.button === 0 && !props.busy && !props.finished && !event.shiftKey) {
+    pressed.value = cell.coord;
+    emit("pressing", true);
+  }
   if (event.button !== 1) return;
 
   event.preventDefault();
@@ -70,17 +77,25 @@ function begin(cell: Cell, event: PointerEvent) {
 }
 
 function enter(cell: Cell, event: PointerEvent) {
+  if (pressed.value && (event.buttons & 1)) pressed.value = cell.coord;
   if (dragging.value && (event.buttons & 4)) {
     visited.value.set(key(cell.coord), cell.coord);
   }
 }
 
+function release() {
+  pressed.value = null;
+  emit("pressing", false);
+}
+
 function cancel() {
+  release();
   dragging.value = false;
   visited.value = new Map();
 }
 
 function end(event: PointerEvent) {
+  release();
   if (!dragging.value || event.button !== 1) return;
 
   const coords = [...visited.value.values()];
@@ -125,6 +140,31 @@ function cellTint(cell: Cell) {
   return tint(colors, 0.32);
 }
 
+function graphic(cell: Cell) {
+  if (cell.triggered) return "mine_red";
+  if (props.lost && cell.flagged && !cell.mine) return "mine_wrong";
+  if (cell.flagged) return "closed_flag";
+  if (cell.mine) return props.won ? "closed_flag" : "mine";
+  if (cell.revealed) return `type${cell.adjacent ?? 0}`;
+
+  if (props.pendingCells.some(value => {
+    if (value === key(cell.coord)) return true;
+    const target = props.cells.find(cell => key(cell.coord) === value);
+    return target?.revealed && !!target.adjacent &&
+      Math.abs(target.coord.row - cell.coord.row) <= 1 &&
+      Math.abs(target.coord.column - cell.coord.column) <= 1;
+  })) return "pressed";
+
+  const target = pressed.value && props.cells.find(value =>
+    key(value.coord) === key(pressed.value!)
+  );
+  if (target && (key(target.coord) === key(cell.coord) ||
+    (target.revealed && target.adjacent &&
+      Math.abs(target.coord.row - cell.coord.row) <= 1 &&
+      Math.abs(target.coord.column - cell.coord.column) <= 1))) return "pressed";
+  return "closed";
+}
+
 function label(cell: Cell) {
   const content = cell.mine
     ? (cell.triggered ? "triggered mine" : "mine")
@@ -148,23 +188,16 @@ function label(cell: Cell) {
 <template>
   <div
     class="board"
-    :style="{ gridTemplateColumns: `repeat(${width}, 2rem)` }"
+    @pointerleave="release"
+    :style="{ gridTemplateColumns: `repeat(${width}, 24px)` }"
   >
     <button
       v-for="cell in cells"
       :key="key(cell.coord)"
       type="button"
       :aria-disabled="busy"
-      :class="{
-        revealed: cell.revealed,
-        triggered: cell.triggered,
-        pending: pendingCell === key(cell.coord) || pendingCells.includes(key(cell.coord)),
-      }"
-      :style="{
-        backgroundImage: `linear-gradient(${cellTint(cell)}, ${cellTint(cell)})`,
-      }"
+      :style="{ '--highlight': cellTint(cell) }"
       :aria-label="label(cell)"
-      :title="label(cell)"
       @click="click(cell, $event)"
       @contextmenu.prevent="flag(cell)"
       @pointerdown="begin(cell, $event)"
@@ -175,46 +208,50 @@ function label(cell: Cell) {
       @auxclick.prevent
       @dragstart.prevent
     >
-      <template v-if="cell.mine">
-        {{ cell.triggered ? '💥' : '✱' }}
-      </template>
-      <template v-else-if="cell.flagged">⚑</template>
-      <template v-else-if="cell.revealed">
-        {{ cell.adjacent || '' }}
-      </template>
-      <template v-else>□</template>
+      <img :src="`/skins/hd/${graphic(cell)}.svg`" alt="" draggable="false" />
     </button>
   </div>
 </template>
 
 <style scoped>
 .board {
-  display: inline-grid;
-  gap: 2px;
+  display: grid;
+  width: max-content;
   user-select: none;
+  grid-auto-rows: 24px;
+  border: 4px solid;
+  border-color: #808080 #fff #fff #808080;
 }
 
 button {
+  position: relative;
   appearance: none;
-  width: 2rem;
-  height: 2rem;
+  width: 100%;
+  height: 100%;
   padding: 0;
-  border: 1px solid #888;
-  border-radius: 2px;
-  background-color: #ccc;
-  color: #111;
+  border: 0;
+  border-radius: 0;
+  background: #c6c6c6;
 }
 
-button.revealed {
-  background-color: #f3f3f3;
+button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-button.triggered {
-  border-color: #b00020;
+button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--highlight);
+  pointer-events: none;
 }
 
-button.pending {
-  outline: 2px dotted #444;
-  outline-offset: -3px;
+button:focus-visible {
+  outline: 2px solid #1574b8;
+  outline-offset: -2px;
+  z-index: 1;
 }
 </style>

@@ -14,7 +14,6 @@ const {
   status,
   busy,
   controlsPending,
-  pendingCell,
   pendingCells,
   syncProblem,
   isHost,
@@ -37,10 +36,8 @@ const layoutWidth = computed(() => {
   if (screen.value !== "game" || !snapshot) return "40rem";
 
   const columns = snapshot.settings.width;
-  const gaps = Math.max(0, columns - 1) * 2;
-
-  // Sidebar + layout gap + board cells + board gaps.
-  return `max(40rem, calc(16rem + ${columns * 2}rem + ${gaps}px))`;
+  // Sidebar, layout gap, cells, and the beveled board frame.
+  return `max(40rem, calc(16rem + ${columns * 24}px + 36px))`;
 });
 </script>
 
@@ -90,9 +87,8 @@ const layoutWidth = computed(() => {
           :colors="colors"
           :is-host="isHost"
           :busy="busy || controlsPending || syncProblem"
-          :pending-cell="pendingCell"
-          :pending-cells="pendingCells"
           :board-busy="busy || syncProblem"
+          :pending-cells="pendingCells"
           @reveal="move('reveal', $event)"
           @flag="(coord, value) => move('flag', coord, value)"
           @chord="move('chord', $event)"
@@ -106,7 +102,7 @@ const layoutWidth = computed(() => {
       </template>
 
       <p v-else>Create or join a room to play.</p>
-      <p v-if="busy">Loading...</p>
+      <p v-if="busy && !gameState?.snapshot">Loading...</p>
 
       <p v-if="delayed" role="status">
         Updates are delayed. The displayed board may be out of date.
