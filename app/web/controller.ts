@@ -524,6 +524,13 @@ export function useTeamsweeperController() {
     }));
   }
 
+  function reassignHost(newHost: string) {
+    return enqueue(() => run("room", async options => {
+      if (!isHost.value) return;
+      check(await api.rooms["reassign-host"]({ newHost }, options));
+    }));
+  }
+
   function startGame() {
     return enqueue(() => run("room", async options => {
       if (!lobby.value || !isHost.value) return;
@@ -762,6 +769,7 @@ export function useTeamsweeperController() {
     createRoom,
     joinRoom,
     leaveRoom,
+    reassignHost,
     startGame,
     move,
     toggleHighlight,

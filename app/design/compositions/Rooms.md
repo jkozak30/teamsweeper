@@ -43,3 +43,11 @@ If the host is absent, Sessioning.expireAbsent expires its sessions. A successfu
 expiration invokes RoomJoining.leave for that host. Existing
 RoomJoining behavior reassigns hosting or closes an empty room;
 Annotations.ClearOnLeave removes the departed host's annotations.
+
+The [host reassigns hosting](reaction:Rooms.ReassignHost) to another active room
+member. Sessioning derives the actor from the cookie; RoomJoining validates host
+authority and target membership. Membership and the current game are unchanged.
+
+```endpoints
+Rooms.ReassignHost at /rooms/reassign-host
+```

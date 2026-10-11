@@ -80,6 +80,21 @@ leave(participant: Participant) : returns ()
     otherwise, if the participant was the host, assign any remaining active participant as host
     returns
 
+reassignHost(actor: Participant, newHost: Participant) : returns ()
+  where actor does not exist or is inactive, or actor hosts an OPEN room and newHost is not an active member of that room
+  then
+    refuses PARTICIPANT_NOT_ACTIVE "That participant is not active."
+  where actor is active and its room is not OPEN
+  then
+    refuses ROOM_NOT_OPEN "That room is not open."
+  where actor is active in an OPEN room and is not its host, or loses hosting before assignment
+  then
+    refuses HOST_REQUIRED "Only the host can reassign hosting."
+  where actor hosts an OPEN room and newHost is an active member of that room
+  then
+    set the room's host to newHost only while actor remains host
+    returns
+
 associate(room: Room, game: Game) : returns ()
   where room does not exist or is CLOSED
   then

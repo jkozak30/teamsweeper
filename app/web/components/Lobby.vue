@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 import GameSettings from "./GameSettings.vue";
-import { tint, type PlayerColors } from "../colors.ts";
+import ParticipantList from "./ParticipantList.vue";
+import { type PlayerColors } from "../colors.ts";
 
 type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
 type Settings = TeamsweeperWireHttp["/game/start"]["input"]["settings"];
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   start: [];
   return: [];
   leave: [];
+  reassign: [participant: string];
 }>();
 </script>
 
@@ -30,27 +32,10 @@ const emit = defineEmits<{
     <h2 class="page-title">Lobby</h2>
 
     <h3>Participants</h3>
-    <ul>
-      <li
-        v-for="player in lobby.members.participants"
-        :key="player.participant"
-      >
-        <span
-          class="swatch"
-          aria-hidden="true"
-          :style="{
-            backgroundColor: tint(
-              colors[player.participant]
-                ? [colors[player.participant]!]
-                : [],
-            ),
-          }"
-        ></span>
-        {{ player.name }}
-        <span v-if="player.participant === lobby.participant">(you)</span>
-        <span v-if="player.participant === lobby.host">(host)</span>
-      </li>
-    </ul>
+    <ParticipantList
+      :lobby="lobby" :colors="colors" :busy="busy"
+      @reassign="emit('reassign', $event)"
+    />
 
     <form id="lobby-start" v-if="isHost" @submit.prevent="emit('start')">
       <GameSettings
@@ -82,14 +67,3 @@ const emit = defineEmits<{
   </section>
 </template>
 
-<style scoped>
-.swatch {
-  display: inline-block;
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 1px solid #555;
-  border-radius: 50%;
-  margin-right: 0.35rem;
-  vertical-align: middle;
-}
-</style>

@@ -2,7 +2,8 @@
 import { computed, ref } from "vue";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 import { rankingMetrics, type RankingState } from "../controller.ts";
-import { tint, type PlayerColors } from "../colors.ts";
+import ParticipantList from "./ParticipantList.vue";
+import { type PlayerColors } from "../colors.ts";
 
 type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
 
@@ -18,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   create: [name: string];
   join: [name: string, code: string];
+  reassign: [participant: string];
 }>();
 
 const rankings = defineModel<RankingState>("rankings", { required: true });
@@ -95,27 +97,10 @@ const currentName = computed(() =>
     <section v-if="lobby && screen === 'game'" class="participants">
       <h2>Participants</h2>
 
-      <ul>
-        <li
-          v-for="player in lobby.members.participants"
-          :key="player.participant"
-        >
-          <span
-            class="swatch"
-            aria-hidden="true"
-            :style="{
-              backgroundColor: tint(
-                colors[player.participant]
-                  ? [colors[player.participant]!]
-                  : [],
-              ),
-            }"
-          ></span>
-          {{ player.name }}
-          <span v-if="player.participant === lobby.participant">(you)</span>
-          <span v-if="player.participant === lobby.host">(host)</span>
-        </li>
-      </ul>
+    <ParticipantList
+      :lobby="lobby" :colors="colors" :busy="busy"
+      @reassign="emit('reassign', $event)"
+    />
     </section>
     <section v-if="lobby" class="past-results">
       <h2>Past results</h2>
@@ -189,14 +174,3 @@ const currentName = computed(() =>
   </aside>
 </template>
 
-<style scoped>
-.swatch {
-  display: inline-block;
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 1px solid #555;
-  border-radius: 50%;
-  margin-right: 0.35rem;
-  vertical-align: middle;
-}
-</style>

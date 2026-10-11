@@ -427,3 +427,23 @@ test("failed membership cleanup retains the expired token for the next sweep", a
   expect((await rooms._getParticipant({ participant: stringField(alice.data, "participant") }))[0]!.active)
     .toBe(false);
 });
+
+test("host reassignment authenticates the actor and immediately transfers authority", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const bob = await post("join", { name: "Bob", code: alice.data.code });
+  const carol = await post("create", { name: "Carol" });
+  const aliceCookie = sessionCookie(alice.response);
+  const bobCookie = sessionCookie(bob.response);
+  const target = stringField(bob.data, "participant");
+  expect((await post("reassign-host", { newHost: target })).response.status).toBe(401);
+  expect((await post("reassign-host", { newHost: target, actor: alice.data.participant }, aliceCookie)).response.status).toBe(400);
+  expect((await post("reassign-host", { newHost: target }, bobCookie)).response.status).toBe(403);
+  expect((await post("reassign-host", { newHost: carol.data.participant }, aliceCookie)).response.status).toBe(403);
+  const changed = await post("reassign-host", { newHost: target }, aliceCookie);
+  expect(changed.response.status).toBe(200);
+  expect(changed.data).toEqual({});
+  expect((await post("current", {}, aliceCookie)).data.host).toBe(target);
+  expect((await post("current", {}, bobCookie)).data.host).toBe(target);
+  expect(await rooms._activeParticipants({ room: stringField(alice.data, "room") })).toHaveLength(2);
+  expect((await post("reassign-host", { newHost: alice.data.participant }, aliceCookie)).response.status).toBe(403);
+});

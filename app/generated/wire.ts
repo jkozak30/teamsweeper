@@ -247,6 +247,14 @@ export type TeamsweeperWire = {
     };
     error: { error: AppWideError | "END_SESSION_NOT_ACTIVE" | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "UNKNOWN_SESSION" };
   };
+  "/rooms/reassign-host": {
+    input: {
+      "newHost": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["reassignHost"]>[0], ["newHost"]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "HOST_REQUIRED" | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+  };
   "/rooms/renew": {
     input: {
       "session": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["renew"]>[0], ["session"]>]>>;
@@ -474,6 +482,13 @@ export type TeamsweeperWireHttp = {
       "ended": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["end"]>>, ["ended"]>>;
     };
     error: { error: HttpAppWideError | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };
+  };
+  "/rooms/reassign-host": {
+    input: {
+      "newHost": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["reassignHost"]>[0], ["newHost"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };
   };
   "/rooms/renew": {
     input: Record<string, never>;

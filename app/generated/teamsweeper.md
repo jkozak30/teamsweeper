@@ -98,6 +98,10 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
   - Refuses `ROOM_UNAVAILABLE`: No open room has that code.
 - `leave(participant: Participant) : returns ()`
   - Refuses `PARTICIPANT_NOT_ACTIVE`: That participant is not active.
+- `reassignHost(actor: Participant, newHost: Participant) : returns ()`
+  - Refuses `PARTICIPANT_NOT_ACTIVE`: That participant is not active.
+  - Refuses `ROOM_NOT_OPEN`: That room is not open.
+  - Refuses `HOST_REQUIRED`: Only the host can reassign hosting.
 - `associate(room: Room, game: Game) : returns ()`
   - Refuses `ROOM_NOT_OPEN`: That room is not open.
   - Refuses `GAME_ALREADY_ASSOCIATED`: That game already belongs to a room.
@@ -1605,6 +1609,47 @@ then
   RequestBoundary.respond (ended, requestId)
 ```
 
+### Rooms.ReassignHost
+
+Authored path: `Rooms.ReassignHost`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 52.
+
+```reaction
+when RequestBoundary.request (newHost, path: "/rooms/reassign-host", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Rooms.ReassignHost#2
+
+Authored path: `Rooms.ReassignHost`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 52.
+
+```reaction
+when Sessioning.current (session, subject: actor), asked by Rooms.ReassignHost
+at the flow's settlement frontier
+where
+  earlier, RequestBoundary.request (newHost, path: "/rooms/reassign-host", requestId, session)
+then
+  RoomJoining.reassignHost (actor, newHost)
+```
+
+### Rooms.ReassignHost#3
+
+Authored path: `Rooms.ReassignHost`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 47.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 52.
+
+```reaction
+when RoomJoining.reassignHost (actor, newHost), asked by Rooms.ReassignHost#2
+where
+  earlier, RequestBoundary.request (newHost, path: "/rooms/reassign-host", requestId, session)
+then
+  RequestBoundary.respond (requestId)
+```
+
 ### Rooms.RecoverHost
 
 Authored path: `Rooms.RecoverHost`.
@@ -1727,4 +1772,5 @@ not listed here have no explicit input contract.
 - `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`
 - `/rooms/leave` — requires `session`
+- `/rooms/reassign-host` — requires `session`, `newHost`
 - `/rooms/renew` — requires `session`

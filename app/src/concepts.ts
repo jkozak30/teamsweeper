@@ -17,6 +17,7 @@ import {
   ParticipantNotActive,
   RoomNotOpen,
   GameAlreadyAssociated,
+  HostRequired,
 } from "./concepts/RoomJoining.ts";
 
 import {
@@ -63,6 +64,7 @@ const roomJoining = registerConcept({
     PARTICIPANT_NOT_ACTIVE: ParticipantNotActive,
     ROOM_NOT_OPEN: RoomNotOpen,
     GAME_ALREADY_ASSOCIATED: GameAlreadyAssociated,
+    HOST_REQUIRED: HostRequired,
   },
 });
 

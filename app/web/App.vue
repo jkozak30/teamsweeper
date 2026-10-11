@@ -20,6 +20,7 @@ const {
   createRoom,
   joinRoom,
   leaveRoom,
+  reassignHost,
   startGame,
   move,
   toggleHighlight,
@@ -40,6 +41,7 @@ const {
       :busy="busy"
       @create="createRoom"
       @join="joinRoom"
+      @reassign="reassignHost"
     />
 
     <main>
@@ -66,6 +68,7 @@ const {
           :busy="busy"
           @start="startGame"
           @return="screen = 'game'"
+          @reassign="reassignHost"
           @leave="leaveRoom"
         />
 

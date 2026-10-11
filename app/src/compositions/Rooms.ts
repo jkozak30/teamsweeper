@@ -144,6 +144,24 @@ const Renew = endpoint(
   { input: { required: ["session"] }, validators: { input: sessionInput } },
 );
 
+const ReassignHost = endpoint(
+  "/rooms/reassign-host",
+  ({ session, actor, newHost }) => receive({ session, newHost })
+    .then(Sessioning.current({ session }).responds({ subject: actor }))
+    .afterFlowSettles()
+    .then(RoomJoining.reassignHost({ actor, newHost }).responds({}))
+    .then(respond({})),
+  {
+    input: { required: ["session", "newHost"] },
+    validators: { input: value => {
+      const fields = value as Record<string, unknown> | null;
+      return fields && typeof fields.newHost === "string" && Object.keys(fields).length === 2
+        ? sessionInput({ session: fields.session })
+        : { ok: false, detail: "Expected a session cookie and newHost string." };
+    } },
+  },
+);
+
 const Leave = endpoint(
   "/rooms/leave",
   ({ session, participant, ended }) =>
@@ -159,4 +177,4 @@ const Leave = endpoint(
   },
 );
 
-export const composition = { Create, Join, ActiveLobby, Members, RecoverHost, Current, Renew, Leave };
+export const composition = { Create, Join, ActiveLobby, Members, RecoverHost, Current, Renew, ReassignHost, Leave };

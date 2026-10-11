@@ -6,6 +6,7 @@ export class RoomUnavailable extends Error {}
 export class ParticipantNotActive extends Error {}
 export class RoomNotOpen extends Error {}
 export class GameAlreadyAssociated extends Error {}
+export class HostRequired extends Error {}
 
 type RoomStatus = "OPEN" | "CLOSED";
 
@@ -131,6 +132,22 @@ export class RoomJoiningConcept {
       );
     }
 
+    return {};
+  }
+
+  async reassignHost({ actor, newHost }: { actor: string; newHost: string }) {
+    const member = await this.participants.findOne({ _id: actor, active: true });
+    if (!member) throw new ParticipantNotActive("That participant is not active.");
+    const room = await this.rooms.findOne({ _id: member.room, status: "OPEN" });
+    if (!room) throw new RoomNotOpen("That room is not open.");
+    if (room.host !== actor) throw new HostRequired("Only the host can reassign hosting.");
+    const target = await this.participants.findOne({ _id: newHost, room: member.room, active: true });
+    if (!target) throw new ParticipantNotActive("That participant is not active.");
+    const result = await this.rooms.updateOne(
+      { _id: member.room, status: "OPEN", host: actor },
+      { $set: { host: newHost } },
+    );
+    if (!result.matchedCount) throw new HostRequired("Only the host can reassign hosting.");
     return {};
   }
 

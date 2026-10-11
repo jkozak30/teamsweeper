@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import {
   RoomJoiningConcept, CreateNameRequired, JoinNameRequired, RoomUnavailable,
-  ParticipantNotActive, RoomNotOpen, GameAlreadyAssociated,
+  ParticipantNotActive, RoomNotOpen, GameAlreadyAssociated, HostRequired,
 } from "../src/concepts/RoomJoining.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
@@ -260,4 +260,30 @@ test("concurrent association across instances gives a game to exactly one room",
     expect(room!.status).toBe("OPEN");
     expect(room!.currentGame).toBe(result.status === "fulfilled" ? game : undefined);
   }
+});
+test("reassigning host preserves membership and refuses a former host", async () => {
+  const alice = await rooms.create({ name: "Alice" });
+  const bob = await rooms.join({ code: alice.code, name: "Bob" });
+  await expect(rooms.reassignHost({ actor: bob.participant, newHost: alice.participant }))
+    .rejects.toBeInstanceOf(HostRequired);
+  const game = crypto.randomUUID();
+  await rooms.associate({ room: alice.room, game });
+  await rooms.reassignHost({ actor: alice.participant, newHost: bob.participant });
+  expect((await rooms._getRoom({ room: alice.room }))[0]!.currentGame).toBe(game);
+  expect((await rooms._getRoom({ room: alice.room }))[0]!.host).toBe(bob.participant);
+  expect(await rooms._activeParticipants({ room: alice.room })).toHaveLength(2);
+  await expect(rooms.reassignHost({ actor: alice.participant, newHost: alice.participant }))
+    .rejects.toBeInstanceOf(HostRequired);
+});
+
+test("reassigning host refuses absent and foreign-room targets", async () => {
+  const alice = await rooms.create({ name: "Alice" });
+  const bob = await rooms.join({ code: alice.code, name: "Bob" });
+  const carol = await rooms.create({ name: "Carol" });
+  await expect(rooms.reassignHost({ actor: alice.participant, newHost: carol.participant }))
+    .rejects.toBeInstanceOf(ParticipantNotActive);
+  await rooms.leave({ participant: bob.participant });
+  await expect(rooms.reassignHost({ actor: alice.participant, newHost: bob.participant }))
+    .rejects.toBeInstanceOf(ParticipantNotActive);
+  expect((await rooms._getRoom({ room: alice.room }))[0]!.host).toBe(alice.participant);
 });
