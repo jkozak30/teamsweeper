@@ -5,18 +5,18 @@ import { concepts, computations } from "../concepts.ts";
 
 const { MinesweeperPlaying, PerformanceRanking, RoomJoining, Sessioning } = concepts;
 
-function recordWin(kind: "reveal" | "chord") {
+function recordResult(kind: "reveal" | "chord", status: "WON" | "LOST") {
   return reaction(({ game, coord, now, participant, room, settings, time, bv, clicks, speed, efficiency, category, measurements }) => {
     const move = kind === "reveal"
       ? MinesweeperPlaying.reveal({ game, coord, now })
       : MinesweeperPlaying.chord({ game, coord, now });
-    return when(move.responds({ status: "WON" }))
+    return when(move.responds({ status }))
       .where(
         earlier(Sessioning.current, {}, { subject: participant }),
         RoomJoining._getParticipant({ participant }).is({ room }),
         MinesweeperPlaying._getGame({ game }).is({ settings }),
         MinesweeperPlaying._getResult({ game }).is({ time, bv, clicks, speed, efficiency }),
-        compute(computations.resultCategory, { settings, status: "WON" }, category),
+        compute(computations.resultCategory, { settings, status }, category),
         compute(computations.resultMeasurements, { time, bv, clicks, speed, efficiency }, measurements),
       )
       .then(PerformanceRanking.record({ item: game, scope: room, category, measurements }).responds({}));
@@ -49,9 +49,11 @@ function input(kind: "rank" | "result"): EndpointValidator {
 
 const Ranked = former(
   "the room's ranked results",
-  ({ room, category, metric, ascending, from, to }, { item, value, rank }) => where().form({
+  ({ room, category, metric, ascending, from, to }, { item, value, rank, resultCategory, measurements }) => where().form({
     results: each(PerformanceRanking._rank({ scope: room, category, metric, ascending, from, to })
-      .is({ item, value, rank })).form({ item, value, rank }),
+      .is({ item, value, rank }))
+      .where(PerformanceRanking._get({ item }).is({ scope: room, category: resultCategory, measurements }))
+      .form({ item, value, rank, category: resultCategory, measurements }),
   }),
 );
 
@@ -94,6 +96,8 @@ const Result = endpoint(
 
 export const composition = {
   Rank, Result, Ranked,
-  RecordReveal: recordWin("reveal"),
-  RecordChord: recordWin("chord"),
+  RecordReveal: recordResult("reveal", "WON"),
+  RecordChord: recordResult("chord", "WON"),
+  RecordRevealLoss: recordResult("reveal", "LOST"),
+  RecordChordLoss: recordResult("chord", "LOST"),
 };

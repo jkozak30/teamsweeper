@@ -6,6 +6,7 @@ import GameView from "./components/Game.vue";
 import { useTeamsweeperController } from "./controller.ts";
 
 const {
+  rankings,
   screen,
   lobby,
   gameState,
@@ -46,6 +47,7 @@ const layoutWidth = computed(() => {
 <template>
   <div class="layout" :style="{ width: layoutWidth }">
     <Sidebar
+      v-model:rankings="rankings"
       :lobby="lobby"
       :colors="colors"
       :screen="screen"

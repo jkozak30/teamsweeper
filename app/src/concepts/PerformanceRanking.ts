@@ -120,9 +120,13 @@ export class PerformanceRankingConcept {
     }
 
     await this.#ensureIndex();
-    const documents = await this.results.find({
-      scope, ...(normalized === undefined ? {} : { category: normalized }),
-    }).sort({ _id: 1 }).toArray();
+    const matches = (value: JsonValue, filter: JsonValue): boolean =>
+      filter !== null && typeof filter === "object" && !Array.isArray(filter)
+        ? value !== null && typeof value === "object" && !Array.isArray(value) &&
+          Object.entries(filter).every(([key, part]) => Object.hasOwn(value, key) && matches(value[key]!, part))
+        : JSON.stringify(value) === JSON.stringify(filter);
+    const documents = (await this.results.find({ scope }).sort({ _id: 1 }).toArray())
+      .filter(document => normalized === undefined || matches(document.category, normalized));
 
     const rows = documents.flatMap(document => {
       const measurement = document.measurements.find(value => value.metric === metric);

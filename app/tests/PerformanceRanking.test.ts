@@ -189,3 +189,12 @@ test("invalid ranking filters and index ranges refuse without changing recorded 
     scope: result.scope, category, measurements: result.measurements,
   }]);
 });
+
+test("partial object category filters select settings or outcome before ranges", async () => {
+  await ranking.record(result);
+  await ranking.record({ ...result, item: "loss", category: { ...category, status: "LOST" }, measurements: [{ metric: "Time", value: 10 }] });
+  expect(await rank({ category: { status: "LOST" } })).toEqual([{ item: "loss", value: 10, rank: 1 }]);
+  expect(await rank({ category: { settings: { width: 9 } }, from: 2, to: 2 }))
+    .toEqual([{ item: "game-1", value: 40, rank: 2 }]);
+  expect(await rank({ category: { settings: { width: 8 } } })).toEqual([]);
+});

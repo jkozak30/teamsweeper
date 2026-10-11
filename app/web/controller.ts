@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { ClientCallOptions } from "@mit-sdg/sync-engine/client";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
@@ -12,6 +12,28 @@ type Snapshot = NonNullable<Game["snapshot"]>;
 type Cell = Snapshot["cells"][number];
 type Coordinate = Cell["coord"];
 
+export const rankingMetrics = [
+  { metric: "Time", label: "Time (seconds)", field: "time", ascending: true },
+  { metric: "3BV", label: "3BV", field: "bv", ascending: false },
+  { metric: "Clicks", label: "Moves", field: "clicks", ascending: true },
+  { metric: "3BV/s", label: "Speed (3BV/s)", field: "speed", ascending: false },
+  { metric: "Efficiency", label: "Efficiency (3BV/move)", field: "efficiency", ascending: false },
+] as const;
+
+export interface RankingState {
+  metric: string;
+  ascending: boolean;
+  matching: boolean;
+  status: "" | "WON" | "LOST";
+  page: number;
+  rows: TeamsweeperWireHttp["/rankings/rank"]["output"]["ranking"]["results"];
+  more: boolean;
+  loading: boolean;
+  refreshing: boolean;
+  loaded: boolean;
+  error: string;
+}
+
 export function useTeamsweeperController() {
   const api = createHttpClient<TeamsweeperWireHttp>({
     baseUrl: "/api",
@@ -22,6 +44,14 @@ export function useTeamsweeperController() {
   const gameState = ref<Game | null>(null);
   const settings = ref({ height: 9, width: 9, mines: 10 });
   const status = ref("");
+
+  const rankings = ref<RankingState>({
+    metric: "Time", ascending: true, matching: true, status: "WON", page: 1,
+    rows: [], more: false, loading: false, refreshing: false, loaded: false, error: "",
+  });
+  let rankingRequest = 0;
+  let lastRankingRead = 0;
+  let savedGame = "";
 
   const busy = ref(true);
   const boardPending = ref(false);
@@ -104,6 +134,13 @@ export function useTeamsweeperController() {
   }
 
   function clearRoom() {
+    rankingRequest++;
+    savedGame = "";
+    rankings.value.rows = [];
+    rankings.value.more = rankings.value.loading = rankings.value.refreshing = false;
+    rankings.value.error = "";
+    rankings.value.loaded = false;
+    rankings.value.page = 1;
     boardRevision = -1;
     annotationCursors = {};
     annotationCache.clear();
@@ -134,6 +171,53 @@ export function useTeamsweeperController() {
       throw new Error(String(result.error));
     }
   }
+
+  async function refreshRankings() {
+    const room = lobby.value?.room;
+    if (!room || disposed) return;
+    const request = ++rankingRequest;
+    const state = rankings.value;
+    state.refreshing = true;
+    state.loading = !state.loaded;
+    state.error = "";
+    lastRankingRead = Date.now();
+    try {
+      const result = await api.rankings.rank({
+        metric: state.metric, ascending: state.ascending,
+        ...(state.matching || state.status ? { category: {
+          ...(state.matching ? { settings: { ...(gameState.value?.snapshot?.settings ?? settings.value) } } : {}),
+          ...(state.status ? { status: state.status } : {}),
+        } } : {}),
+        from: (state.page - 1) * 10 + 1, to: state.page * 10 + 1,
+      }, { timeoutMs: 2500 });
+      if (disposed || request !== rankingRequest || lobby.value?.room !== room) return;
+      check(result);
+      if ("error" in result) return;
+      state.loaded = true;
+      state.rows = result.ranking.results.slice(0, 10);
+      state.more = result.ranking.results.length > 10;
+    } catch {
+      if (!disposed && request === rankingRequest && lobby.value?.room === room) {
+        state.error = "Could not load rankings. Retry or wait for the next refresh.";
+      }
+    } finally {
+      if (request === rankingRequest) state.loading = state.refreshing = false;
+    }
+  }
+
+  watch(() => rankings.value.metric, metric => {
+    rankings.value.ascending = rankingMetrics.find(value => value.metric === metric)?.ascending ?? true;
+  }, { flush: "sync" });
+  watch([() => lobby.value?.room, () => rankings.value.metric, () => rankings.value.ascending,
+    () => rankings.value.status, () => rankings.value.matching, () => rankings.value.matching
+      ? JSON.stringify(gameState.value?.snapshot?.settings ?? settings.value) : ""], () => {
+    rankings.value.rows = [];
+    rankings.value.loaded = false;
+    rankings.value.more = false;
+    if (rankings.value.page !== 1) rankings.value.page = 1;
+    else void refreshRankings();
+  });
+  watch(() => rankings.value.page, () => { rankings.value.rows = []; rankings.value.loaded = false; void refreshRankings(); });
 
   function refreshState(
     scope: "full" | "game" = "full",
@@ -220,6 +304,24 @@ export function useTeamsweeperController() {
           throw error;
         }
       }
+      // Read saved completed games once; if recording is still pending, the next poll retries.
+      if (gameState.value?.game && ["WON", "LOST"].includes(gameState.value.snapshot?.status ?? "") && savedGame !== gameState.value.game) {
+        const item = gameState.value.game;
+        try {
+          const saved = await api.rankings.result({ item }, options);
+          if (obsolete() || gameState.value?.game !== item) return;
+          if (!("error" in saved)) {
+            const values = new Map(saved.result.measurements.map(value => [value.metric, value.value]));
+            const result = Object.fromEntries(rankingMetrics.map(value => [value.field, values.get(value.metric)]));
+            if (rankingMetrics.every(value => Number.isFinite(result[value.field]))) {
+              updateSnapshot(snapshot => ({ ...snapshot, results: [result as Snapshot["results"][number]] }));
+              savedGame = item;
+              void refreshRankings();
+            }
+          }
+        } catch { /* Keep confirmed statistics if the saved read fails. */ }
+      }
+      if (obsolete()) return;
       lastSynced.value = Date.now();
       clock.value = Date.now();
       syncProblem.value = false;
@@ -522,6 +624,9 @@ export function useTeamsweeperController() {
 
   function poll() {
     clock.value = Date.now();
+    if (lobby.value && !rankings.value.refreshing && clock.value - lastRankingRead >= 5000) {
+      void refreshRankings();
+    }
 
     if (
       !busy.value &&
@@ -562,6 +667,7 @@ export function useTeamsweeperController() {
   });
 
   return {
+    rankings,
     screen,
     lobby,
     gameState,

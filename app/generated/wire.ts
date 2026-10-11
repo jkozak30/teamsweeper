@@ -170,7 +170,9 @@ export type TeamsweeperWire = {
     output: {
       "ranking": {
         "results": {
-          "item": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["item"]>>;
+          "category": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>>>, ["category"]>>;
+          "item": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>[0], ["item"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["item"]>]>>;
+          "measurements": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>>>, ["measurements"]>>;
           "rank": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["rank"]>>;
           "value": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["value"]>>;
         }[];
@@ -394,7 +396,9 @@ export type TeamsweeperWireHttp = {
     output: {
       "ranking": {
         "results": {
-          "item": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["item"]>>;
+          "category": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>>>, ["category"]>>;
+          "item": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>[0], ["item"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["item"]>]>>;
+          "measurements": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_get"]>>>, ["measurements"]>>;
           "rank": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["rank"]>>;
           "value": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["value"]>>;
         }[];

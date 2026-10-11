@@ -98,7 +98,7 @@ for (const kind of ["reveal", "chord"] as const) {
   });
 }
 
-test("idle games, ordinary moves, and losses are not recorded", async () => {
+test("idle games and ordinary moves are not recorded; a losing reveal is saved", async () => {
   const alice = await enter("Alice");
   const game = await start(alice);
   expect(await ranking._get({ item: game })).toEqual([]);
@@ -112,8 +112,11 @@ test("idle games, ordinary moves, and losses are not recorded", async () => {
   expect(loss.status).toBe(200);
   expect(loss.data.changes.update.status).toBe("LOST");
   expect(loss.data.changes.update.results).toHaveLength(1);
-  expect((await post("rankings/result", { item: game }, alice.cookie)).status).toBe(404);
-  expect(await saved().countDocuments()).toBe(0);
+  const result = await post("rankings/result", { item: game }, alice.cookie);
+  expect(result.status).toBe(200);
+  expect(result.data.result.category).toEqual({ settings, status: "LOST" });
+  expect(result.data.result.measurements).toHaveLength(5);
+  expect(await saved().countDocuments()).toBe(1);
 });
 
 test("reloads, polls, and refused moves preserve saved wins; historical reads never recompute", async () => {
@@ -134,7 +137,7 @@ test("reloads, polls, and refused moves preserve saved wins; historical reads ne
     expect(result.data).toMatchObject({ item: game, result: { category: original.category, measurements: original.measurements } });
     const rows = await post("rankings/rank", { metric: "Clicks", ascending: true }, alice.cookie);
     expect(rows.status).toBe(200);
-    expect(rows.data.ranking.results).toEqual([{ item: game, value: 2, rank: 1 }]);
+    expect(rows.data.ranking.results).toMatchObject([{ item: game, value: 2, rank: 1 }]);
   } finally {
     MinesweeperPlayingConcept.prototype._getResult = computeResult;
   }
@@ -167,7 +170,8 @@ test("ranking requests forward metric, category, direction, and range, with defa
   ] as const) {
     const result = await post("rankings/rank", body, bob.cookie);
     expect(result.status).toBe(200);
-    expect(result.data.ranking.results).toEqual(expected);
+    expect(result.data.ranking.results).toHaveLength(expected.length);
+    expect(result.data.ranking.results).toMatchObject(expected);
   }
 });
 
@@ -215,4 +219,44 @@ test("read endpoints reject malformed inputs and caller-supplied scope", async (
   for (const body of [{ item: "" }, { item: "x", scope: alice.room }]) {
     expect((await post("rankings/result", body, alice.cookie)).status).toBe(400);
   }
+});
+
+
+test("a losing chord records once with LOST category and saved measurements", async () => {
+  const alice = await enter("Alice");
+  const game = await start(alice);
+  await opening(game, alice.cookie);
+  expect((await move("flag", game, alice.cookie, 0, 1, { value: true })).status).toBe(200);
+  const loss = await move("chord", game, alice.cookie, 1, 1);
+  expect(loss.status).toBe(200);
+  expect(loss.data.changes.update.status).toBe("LOST");
+  const record = (await ranking._get({ item: game }))[0]!;
+  expect(record.category).toEqual({ settings, status: "LOST" });
+  expect(record.measurements.find(value => value.metric === "Clicks")!.value).toBe(loss.data.changes.update.results[0].clicks);
+  expect((await move("chord", game, alice.cookie, 1, 1)).status).toBe(409);
+  expect(await saved().countDocuments()).toBe(1);
+});
+
+test("outcome and board filters work independently and together before ranking and slicing", async () => {
+  const alice = await enter("Alice");
+  for (const [item, status, board, value] of [
+    ["win", "WON", settings, 4], ["loss", "LOST", settings, 2],
+    ["other-board", "LOST", { height: 4, width: 4, mines: 2 }, 1],
+  ] as const) await ranking.record({ item, scope: alice.room, category: { settings: board, status }, measurements: [{ metric: "Time", value }] });
+  for (const [filter, items] of [
+    [{ status: "WON" }, ["win"]], [{ status: "LOST" }, ["other-board", "loss"]],
+    [{ settings }, ["loss", "win"]], [{ settings, status: "LOST" }, ["loss"]],
+    [{ settings, from: 2, to: 2 }, ["win"]],
+  ] as const) {
+    const result = await post("rankings/rank", { metric: "Time", ascending: true,
+      category: { ...("settings" in filter ? { settings: filter.settings } : {}), ...("status" in filter ? { status: filter.status } : {}) },
+      ...("from" in filter ? { from: filter.from, to: filter.to } : {}),
+    }, alice.cookie);
+    expect(result.status).toBe(200);
+    expect(result.data.ranking.results.map((row: { item: string }) => row.item)).toEqual(items);
+    expect(result.data.ranking.results[0].rank).toBe("from" in filter ? 2 : 1);
+    expect(result.data.ranking.results[0].category).not.toBeUndefined();
+    expect(result.data.ranking.results[0].measurements).toHaveLength(1);
+  }
+  expect((await post("rankings/rank", { metric: "Time", ascending: true, status: "PLAYING" }, alice.cookie)).status).toBe(400);
 });

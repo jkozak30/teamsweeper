@@ -42,6 +42,7 @@ import {
   PerformanceRankingConcept,
   InvalidResult,
   ResultAlreadyRecorded,
+  type Category,
 } from "./concepts/PerformanceRanking.ts";
 
 const resultMetrics: Record<string, string> = {
@@ -109,7 +110,7 @@ export const applicationConceptSet = conceptSet({
   Annotating: annotating,
   PerformanceRanking: performanceRanking,
 }, {
-  rankingCategory: ({ category }: { category: unknown }) => category ?? undefined,
+  rankingCategory: ({ category }: { category: Category | null }) => category ?? undefined,
   resultCategory: ({ settings, status }: {
     settings: { height: number; width: number; mines: number };
     status: string;

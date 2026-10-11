@@ -61,7 +61,9 @@ record(item: Item, scope: Scope, category: Category, measurements: Measurements)
 
 ```queries
 _rank(scope: Scope, category?: Category, metric: Metric, ascending: Flag, from?: Number, to?: Number) : many (item: Item, value: Number, rank: Number)
-  Returns results in scope, and category when provided, that contain metric.
+  Returns results in scope that contain metric and match category when provided.
+  String categories match exactly. Object filters match their supplied fields recursively;
+  omitted fields are unrestricted. Arrays and other JSON values match exactly.
   Sorts by its value ascending when ascending is true, otherwise descending.
   Ranks are 1-indexed positions; ties share rank, e.g. 1, 1, 3.
   Tied items appear in ascending identity order. Optional from/to select inclusive,
