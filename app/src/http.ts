@@ -28,6 +28,7 @@ export const policy = httpPolicy({
       name: "teamsweeper-session",
       input: "session",
       issue: [
+        { path: "/rooms/renew", value: "session", expires: "expiresAt" },
         {
           path: "/rooms/create",
           value: "session",

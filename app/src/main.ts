@@ -1,3 +1,4 @@
+import { cleanupSessions } from "./session-cleanup.ts";
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
 import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 
@@ -39,3 +40,14 @@ const server = Bun.serve({
 });
 
 console.log(`Backend listening on ${server.url}`);
+
+let cleaning = false;
+async function sweepSessions() {
+  if (cleaning) return;
+  cleaning = true;
+  try { await cleanupSessions(application.concepts); }
+  catch (error) { console.error("Session cleanup failed; will retry.", error); }
+  finally { cleaning = false; }
+}
+void sweepSessions();
+setInterval(sweepSessions, 15_000).unref();

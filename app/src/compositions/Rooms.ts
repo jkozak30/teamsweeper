@@ -1,5 +1,5 @@
 import { endpoint, receive, respond, type EndpointValidator } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concepts.ts";
 
 const { RoomJoining, Sessioning } = concepts;
@@ -83,11 +83,23 @@ const Members = former(
   }),
 );
 
+const RecoverHost = reaction(({ participant, room, host }) =>
+  when(Sessioning.current({}).responds({ subject: participant }))
+    .where(
+      RoomJoining._getParticipant({ participant }).is({ room, active: true }),
+      RoomJoining._getRoom({ room }).is({ status: "OPEN", host }),
+      no(Sessioning._present({ subject: host }).is({})),
+    )
+    .then(Sessioning.expireAbsent({ subject: host }).responds({ expired: true }))
+    .then(RoomJoining.leave({ participant: host }).responds({})),
+);
+
 const Current = endpoint(
   "/rooms/current",
   ({ session, participant, room, code, host }) =>
     receive({ session })
       .then(Sessioning.current({ session }).responds({ subject: participant }))
+      .afterFlowSettles()
       .then(
         where(ActiveLobby({ participant }).is({ room, code, host }))
           .then(respond({
@@ -113,6 +125,25 @@ const Current = endpoint(
   },
 );
 
+const Renew = endpoint(
+  "/rooms/renew",
+  ({ session, participant, room, expiresAt }) => receive({ session })
+    .then(Sessioning.current({ session }).responds({ subject: participant }))
+    .afterFlowSettles()
+    .then(
+      where(ActiveLobby({ participant }).is({}))
+        .then(Sessioning.renew({ session }).responds({ expiresAt }))
+        .then(respond({ session, expiresAt })).named("room-open"),
+      where(
+        RoomJoining._getParticipant({ participant }).is({ room, active: true }),
+        no(RoomJoining._getRoom({ room }).is({ status: "OPEN" })),
+      ).then(respond({ error: "ROOM_NOT_OPEN" })).named("room-unavailable"),
+      where(no(RoomJoining._getParticipant({ participant }).is({ active: true })))
+        .then(respond({ error: "PARTICIPANT_NOT_ACTIVE" })).named("participant-inactive"),
+    ),
+  { input: { required: ["session"] }, validators: { input: sessionInput } },
+);
+
 const Leave = endpoint(
   "/rooms/leave",
   ({ session, participant, ended }) =>
@@ -128,4 +159,4 @@ const Leave = endpoint(
   },
 );
 
-export const composition = { Create, Join, ActiveLobby, Members, Current, Leave };
+export const composition = { Create, Join, ActiveLobby, Members, RecoverHost, Current, Renew, Leave };

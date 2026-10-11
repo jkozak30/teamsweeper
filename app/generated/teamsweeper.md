@@ -122,11 +122,18 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 - `start(subject: Subject) : returns (session: Session, expiresAt: DateTime)`
 - `current(session: Session) : returns (subject: Subject)`
   - Refuses `UNKNOWN_SESSION`: This session is not active.
+- `renew(session: Session) : returns (session: Session, expiresAt: DateTime)`
+  - Refuses `UNKNOWN_SESSION`: This session is not active.
+- `expireAbsent(subject: Subject) : returns (expired: Flag)`
+- `purge(session: Session) : returns ()`
 - `end(session: Session) : returns (ended: Flag)`
   - Refuses `END_SESSION_NOT_ACTIVE`: This session is not active.
 
 #### Queries
 
+- `_present(subject: Subject) : optional (subject: Subject)`
+- `_expired() : many (session: Session, subject: Subject)`
+- `_subjectActive(subject: Subject) : optional (subject: Subject)`
 - `_active(session: Session) : optional (subject: Subject, expiresAt: DateTime)`
 
 #### Instances
@@ -234,7 +241,7 @@ _the authored explanation; this section records the generated shape._
 ### the active room participants
 
 Authored path: `Rooms.Members`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 18.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 16.
 
 ```former
 Former "the active room participants" — inputs (room); bindings (participant, name); promises exactly one record — forms:
@@ -442,6 +449,7 @@ then
 
 Authored path: `Annotations.ClearOnLeave`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 26.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 32.
 
 ```reaction
 when RoomJoining.leave (participant)
@@ -1410,7 +1418,7 @@ then
 
 Authored path: `Rooms.Create`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 3.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
 
 ```reaction
 when RequestBoundary.request (name, path: "/rooms/create", requestId)
@@ -1422,7 +1430,7 @@ then
 
 Authored path: `Rooms.Create`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 3.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
 
 ```reaction
 when RoomJoining.create (name, code, participant, room), asked by Rooms.Create
@@ -1434,7 +1442,7 @@ then
 
 Authored path: `Rooms.Create`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 3.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 9.
 
 ```reaction
 when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Create#2
@@ -1448,8 +1456,8 @@ then
 ### Rooms.Current
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 13.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/current", requestId, session)
@@ -1460,11 +1468,12 @@ then
 ### Rooms.Current:participant-inactive#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 13.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
+at the flow's settlement frontier
 where
   no RoomJoining._getParticipant (participant) has (active: true)
   earlier, RequestBoundary.request (path: "/rooms/current", requestId, session)
@@ -1475,11 +1484,12 @@ then
 ### Rooms.Current:room-open#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 13.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
+at the flow's settlement frontier
 where
   view "the active lobby of (participant)" with (participant) has (code, host, room)
   earlier, RequestBoundary.request (path: "/rooms/current", requestId, session)
@@ -1490,11 +1500,12 @@ then
 ### Rooms.Current:room-unavailable#2
 
 Authored path: `Rooms.Current`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 14.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 21.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 13.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Current
+at the flow's settlement frontier
 where
   RoomJoining._getParticipant (participant) has (active: true, room)
   no RoomJoining._getRoom (room) has (status: "OPEN")
@@ -1507,7 +1518,7 @@ then
 
 Authored path: `Rooms.Join`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 4.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when RequestBoundary.request (code, name, path: "/rooms/join", requestId)
@@ -1519,7 +1530,7 @@ then
 
 Authored path: `Rooms.Join`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 4.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when RoomJoining.join (code, name, participant), asked by Rooms.Join
@@ -1531,7 +1542,7 @@ then
 
 Authored path: `Rooms.Join`.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 4.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 11.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 10.
 
 ```reaction
 when Sessioning.start (subject: participant, expiresAt, session), asked by Rooms.Join#2
@@ -1544,8 +1555,8 @@ then
 ### Rooms.Leave
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 31.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 37.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/leave", requestId, session)
@@ -1556,8 +1567,8 @@ then
 ### Rooms.Leave#2
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 31.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 37.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rooms.Leave
@@ -1568,8 +1579,8 @@ then
 ### Rooms.Leave#3
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 31.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 37.
 
 ```reaction
 when RoomJoining.leave (participant), asked by Rooms.Leave#2
@@ -1582,8 +1593,8 @@ then
 ### Rooms.Leave#4
 
 Authored path: `Rooms.Leave`.
-- Covered by [Rooms](../design/compositions/Rooms.md), line 24.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 31.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 37.
 
 ```reaction
 when Sessioning.end (session, ended), asked by Rooms.Leave#3
@@ -1592,6 +1603,106 @@ where
   earlier, RequestBoundary.request (path: "/rooms/leave", requestId, session)
 then
   RequestBoundary.respond (ended, requestId)
+```
+
+### Rooms.RecoverHost
+
+Authored path: `Rooms.RecoverHost`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 40.
+
+```reaction
+when Sessioning.current (subject: participant)
+where
+  RoomJoining._getParticipant (participant) has (active: true, room)
+  RoomJoining._getRoom (room) has (host, status: "OPEN")
+  no Sessioning._present (subject: host)
+then
+  Sessioning.expireAbsent (subject: host)
+```
+
+### Rooms.RecoverHost#2
+
+Authored path: `Rooms.RecoverHost`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 40.
+
+```reaction
+when Sessioning.expireAbsent (subject: host, expired: true), asked by Rooms.RecoverHost
+then
+  RoomJoining.leave (participant: host)
+```
+
+### Rooms.Renew
+
+Authored path: `Rooms.Renew`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 22.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+
+```reaction
+when RequestBoundary.request (path: "/rooms/renew", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Rooms.Renew:participant-inactive#2
+
+Authored path: `Rooms.Renew`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 22.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rooms.Renew
+at the flow's settlement frontier
+where
+  no RoomJoining._getParticipant (participant) has (active: true)
+  earlier, RequestBoundary.request (path: "/rooms/renew", requestId, session)
+then
+  RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
+```
+
+### Rooms.Renew:room-open#2
+
+Authored path: `Rooms.Renew`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 22.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rooms.Renew
+at the flow's settlement frontier
+where
+  view "the active lobby of (participant)" with (participant)
+then
+  Sessioning.renew (session)
+```
+
+### Rooms.Renew:room-open#3
+
+Authored path: `Rooms.Renew`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 22.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+
+```reaction
+when Sessioning.renew (session, expiresAt), asked by Rooms.Renew:room-open#2
+where
+  earlier, RequestBoundary.request (path: "/rooms/renew", requestId, session)
+then
+  RequestBoundary.respond (expiresAt, requestId, session)
+```
+
+### Rooms.Renew:room-unavailable#2
+
+Authored path: `Rooms.Renew`.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 22.
+- Covered by [Rooms](../design/compositions/Rooms.md), line 28.
+
+```reaction
+when Sessioning.current (session, subject: participant), asked by Rooms.Renew
+at the flow's settlement frontier
+where
+  RoomJoining._getParticipant (participant) has (active: true, room)
+  no RoomJoining._getRoom (room) has (status: "OPEN")
+  earlier, RequestBoundary.request (path: "/rooms/renew", requestId, session)
+then
+  RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
 
 ## Endpoint input contracts
@@ -1616,3 +1727,4 @@ not listed here have no explicit input contract.
 - `/rooms/current` — requires `session`
 - `/rooms/join` — requires `code`, `name`
 - `/rooms/leave` — requires `session`
+- `/rooms/renew` — requires `session`

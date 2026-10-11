@@ -1,3 +1,4 @@
+import { cleanupSessions } from "../src/session-cleanup.ts";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
 import { policy } from "../src/http.ts";
@@ -7,6 +8,8 @@ let testDb: TestDb;
 let api: ReturnType<typeof createTestApp>["api"];
 let rooms: ReturnType<typeof createTestApp>["rooms"];
 let now: Date;
+let concepts: ReturnType<typeof createTestApp>["concepts"];
+let whenIdle: ReturnType<typeof createTestApp>["whenIdle"];
 
 const origin = policy.publicOrigin ?? "http://127.0.0.1:3000";
 
@@ -17,7 +20,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   now = new Date();
-  ({ api, rooms } = createTestApp(testDb.db, () => now));
+  ({ api, rooms, concepts, whenIdle } = createTestApp(testDb.db, () => now));
 });
 
 afterAll(async () => {
@@ -324,4 +327,103 @@ test("Current rejects inactive membership even with an active session", async ()
 
   expect(result.response.status).toBe(403);
   expect(result.data).toEqual({ error: "FORBIDDEN" });
+});
+test("renewal reissues the same private cookie and refuses invalid or expired sessions", async () => {
+  const created = await post("create", { name: "Alice" });
+  const cookie = sessionCookie(created.response);
+  now = new Date(now.getTime() + 60_000);
+  const renewed = await post("renew", {}, cookie);
+  expect(renewed.response.status).toBe(200);
+  expect(renewed.data).toEqual({});
+  expect(sessionCookie(renewed.response)).toBe(cookie);
+  expect(renewed.response.headers.get("Set-Cookie")).toContain("HttpOnly");
+  expect((await post("renew", { extra: true }, cookie)).response.status).toBe(400);
+  expect((await post("renew")).response.status).toBe(401);
+  now = new Date(now.getTime() + 600_000);
+  expect((await post("renew", {}, cookie)).response.status).toBe(401);
+});
+
+test("ten-second host recovery removes membership and rejects the returning host", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const bob = await post("join", { name: "Bob", code: alice.data.code });
+  const aliceCookie = sessionCookie(alice.response);
+  const bobCookie = sessionCookie(bob.response);
+  now = new Date(now.getTime() + 9_000);
+  expect((await post("current", {}, bobCookie)).data.host).toBe(alice.data.participant);
+  now = new Date(now.getTime() + 1_000);
+  expect((await post("current", {}, bobCookie)).data.host).toBe(bob.data.participant);
+  expect((await post("current", {}, aliceCookie)).data.error).toBe("UNAUTHORIZED");
+  expect((await post("renew", {}, aliceCookie)).response.status).toBe(401);
+  expect((await rooms._getParticipant({ participant: stringField(alice.data, "participant") }))[0]!.active)
+    .toBe(false);
+});
+
+test("concurrent host recovery converges to one responsive host", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const bob = await post("join", { name: "Bob", code: alice.data.code });
+  const carol = await post("join", { name: "Carol", code: alice.data.code });
+  now = new Date(now.getTime() + 10_000);
+  const responses = await Promise.all([
+    post("current", {}, sessionCookie(bob.response)),
+    post("current", {}, sessionCookie(carol.response)),
+  ]);
+  expect(responses.every(value => value.response.status === 200)).toBe(true);
+  const room = (await rooms._getRoom({ room: stringField(alice.data, "room") }))[0]!;
+  expect([bob.data.participant, carol.data.participant]).toContain(room.host);
+  expect((await post("current", {}, sessionCookie(bob.response))).data.host).toBe(room.host);
+  expect((await post("current", {}, sessionCookie(carol.response))).data.host).toBe(room.host);
+});
+
+test("cleanup removes expired members and annotations, transfers host, and closes the last empty room", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const bob = await post("join", { name: "Bob", code: alice.data.code });
+  const participant = stringField(alice.data, "participant");
+  await testDb.db.collection<{ _id: string; author: string; target: string }>("annotating.annotations").insertOne({
+    _id: "expired-highlight", author: participant, target: "cell",
+  });
+  now = new Date(now.getTime() + 60_000);
+  await post("renew", {}, sessionCookie(bob.response));
+  now = new Date(now.getTime() + 540_000);
+  await cleanupSessions(concepts);
+  await whenIdle();
+  expect((await rooms._getParticipant({ participant }))[0]!.active).toBe(false);
+  const room = (await rooms._getRoom({ room: stringField(alice.data, "room") }))[0]!;
+  expect(room.host).toBe(stringField(bob.data, "participant"));
+  expect(await testDb.db.collection("annotating.annotations").findOne({ author: participant })).toBeNull();
+  now = new Date(now.getTime() + 60_000);
+  await cleanupSessions(concepts);
+  expect((await rooms._getRoom({ room: stringField(alice.data, "room") }))[0]!.status).toBe("CLOSED");
+  await cleanupSessions(concepts); // Repeat sweeps are harmless.
+});
+
+test("one expired token does not remove a subject with another live session", async () => {
+  const alice = await post("create", { name: "Alice" });
+  const participant = stringField(alice.data, "participant");
+  now = new Date(now.getTime() + 60_000);
+  const second = await concepts.Sessioning.start({ subject: participant });
+  expect("error" in second).toBe(false);
+  now = new Date(now.getTime() + 540_000);
+  await cleanupSessions(concepts);
+  expect((await rooms._getParticipant({ participant }))[0]!.active).toBe(true);
+  now = new Date(now.getTime() + 60_000);
+  await cleanupSessions(concepts);
+  expect((await rooms._getParticipant({ participant }))[0]!.active).toBe(false);
+});
+
+test("failed membership cleanup retains the expired token for the next sweep", async () => {
+  const alice = await post("create", { name: "Alice" });
+  now = new Date(now.getTime() + 600_000);
+  await expect(cleanupSessions({
+    ...concepts,
+    RoomJoining: {
+      ...concepts.RoomJoining,
+      _getParticipant: input => concepts.RoomJoining._getParticipant(input),
+      leave: async () => { throw new Error("Temporary failure"); },
+    },
+  })).rejects.toBeInstanceOf(Error);
+  expect((await concepts.Sessioning._expired({})).length).toBe(1);
+  await cleanupSessions(concepts);
+  expect((await concepts.Sessioning._expired({})).length).toBe(0);
+  expect((await rooms._getParticipant({ participant: stringField(alice.data, "participant") }))[0]!.active)
+    .toBe(false);
 });

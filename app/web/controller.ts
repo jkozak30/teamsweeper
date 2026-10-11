@@ -137,6 +137,8 @@ export function useTeamsweeperController() {
   }
 
   function clearRoom() {
+    renewalController?.abort();
+    lastRenewal = renewalAttempt = 0;
     rankingRequest++;
     savedGame = "";
     rankings.value.rows = [];
@@ -416,7 +418,10 @@ export function useTeamsweeperController() {
     const before = gameState.value;
     let confirmedBoard = false;
 
-    if (mode === "room") busy.value = true;
+    if (mode === "room") {
+      renewalController?.abort();
+      busy.value = true;
+    }
     else boardPending.value = true;
 
     pendingCell.value = coord ? key(coord) : null;
@@ -660,8 +665,41 @@ export function useTeamsweeperController() {
     }
   }
 
+  let renewalController: AbortController | null = null;
+  let lastRenewal = 0;
+  let renewalAttempt = 0;
+  let renewing = false;
+
+  async function renewSession() {
+    const room = lobby.value?.room;
+    if (!room || renewing || busy.value || disposed) return;
+    const now = Date.now();
+    if (now - lastRenewal < 60_000 || now - renewalAttempt < 5_000) return;
+    renewing = true;
+    renewalAttempt = now;
+    const controller = new AbortController();
+    renewalController = controller;
+    try {
+      const result = await api.rooms.renew({}, { timeoutMs: 2500, signal: controller.signal });
+      if (disposed || lobby.value?.room !== room) return;
+      if ("error" in result) {
+        if (["UNAUTHORIZED", "FORBIDDEN", "CONFLICT"].includes(result.error)) {
+          clearRoom();
+          status.value = "Your room session is no longer available.";
+        }
+        return;
+      }
+      lastRenewal = Date.now();
+    } catch { /* Polling handles connection feedback; retry renewal after a short delay. */ }
+    finally {
+      if (renewalController === controller) renewalController = null;
+      renewing = false;
+    }
+  }
+
   function poll() {
     clock.value = Date.now();
+    void renewSession();
     if (lobby.value && !rankings.value.refreshing && clock.value - lastRankingRead >= 5000) {
       void refreshRankings();
     }
@@ -698,6 +736,7 @@ export function useTeamsweeperController() {
     disposed = true;
     readController?.abort();
     actionController?.abort();
+    renewalController?.abort();
 
     if (timer !== undefined) clearInterval(timer);
     window.removeEventListener("focus", poll);

@@ -36,5 +36,5 @@ export function createTestApp(db: Db, clock: () => Date = () => new Date()) {
     policy,
   });
 
-  return { api, rooms, whenIdle: () => application.whenIdle() };
+  return { api, rooms, concepts: application.concepts, whenIdle: () => application.whenIdle() };
 }
