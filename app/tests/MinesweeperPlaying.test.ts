@@ -538,3 +538,30 @@ test("queued actions stop after disconnection and a failure does not poison late
   await queue.enqueue(async () => { executed = true; });
   expect(executed).toBe(true);
 });
+test("board limits permit the maximum dimensions and mine count", async () => {
+  for (const settings of [
+    { height: 100, width: 100, mines: 9999 },
+    { height: 50, width: 50, mines: 500 },
+    { height: 1, width: 100, mines: 99 },
+    { height: 100, width: 1, mines: 99 },
+  ]) {
+    const { game } = await playing.create({ settings });
+    expect((await playing._getGame({ game }))[0]!.settings).toEqual(settings);
+  }
+});
+
+test("board limits refuse oversized dimensions and invalid mine counts", async () => {
+  for (const settings of [
+    { height: 101, width: 1, mines: 1 },
+    { height: 1, width: 101, mines: 1 },
+    { height: 100, width: 100, mines: 10000 },
+    { height: 100, width: 100, mines: 0 },
+    { height: 100, width: 100, mines: 1.5 },
+    { height: 0, width: 100, mines: 1 },
+    { height: 1.5, width: 100, mines: 1 },
+    { height: 100, width: 1.5, mines: 1 },
+    { height: 1, width: 1, mines: 1 },
+  ]) {
+    await expect(playing.create({ settings })).rejects.toBeInstanceOf(InvalidSettings);
+  }
+});

@@ -39,7 +39,7 @@ Defined in [MinesweeperPlaying](../design/concepts/MinesweeperPlaying.md), line 
 #### Actions
 
 - `create(settings: Settings) : returns (game: Game)`
-  - Refuses `INVALID_SETTINGS`: Use positive safe integer dimensions and fewer mines than cells.
+  - Refuses `INVALID_SETTINGS`: Use integer dimensions from 1 to 100 and a positive integer mine count smaller than the cell count.
 - `reveal(game: Game, coord: Coordinate, now: DateTime) : returns (status: Status)`
   - Refuses `GAME_NOT_FOUND`: That game does not exist.
   - Refuses `MOVE_NOT_ALLOWED`: That move is not allowed in the current game state.

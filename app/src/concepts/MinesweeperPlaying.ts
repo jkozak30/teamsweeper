@@ -1,3 +1,4 @@
+import { MAX_BOARD_DIMENSION, INVALID_BOARD_SETTINGS } from "../board-limits.ts";
 import { randomInt } from "node:crypto";
 import type { Collection, Db } from "mongodb";
 
@@ -57,13 +58,13 @@ export class MinesweeperPlayingConcept {
     const { height, width, mines } = settings;
 
     if (
-      !Number.isSafeInteger(height) || height <= 0 ||
-      !Number.isSafeInteger(width) || width <= 0 ||
+      !Number.isSafeInteger(height) || height <= 0 || height > MAX_BOARD_DIMENSION ||
+      !Number.isSafeInteger(width) || width <= 0 || width > MAX_BOARD_DIMENSION ||
       !Number.isSafeInteger(height * width) ||
       !Number.isSafeInteger(mines) || mines <= 0 ||
       mines >= height * width
     ) {
-      throw new InvalidSettings("Use positive safe integer dimensions and fewer mines than cells.");
+      throw new InvalidSettings(INVALID_BOARD_SETTINGS);
     }
 
     const game = crypto.randomUUID();

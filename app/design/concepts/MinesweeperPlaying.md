@@ -71,10 +71,10 @@ Rule: A LOST game has at least one mine revealed.
 
 ```actions
 create(settings: Settings) : returns (game: Game)
-  where height, width, or mines is not a positive safe integer, or height times width is not a safe integer, or mines is at least height times width
+  where height, width, or mines is not a positive safe integer, or height or width exceeds 100, or mines is at least height times width
   then
-    refuses INVALID_SETTINGS "Use positive safe integer dimensions and fewer mines than cells."
-  where height, width, and mines are positive safe integers and height times width is a safe integer and mines is smaller than height times width
+    refuses INVALID_SETTINGS "Use integer dimensions from 1 to 100 and a positive integer mine count smaller than the cell count."
+  where height, width, and mines are positive safe integers and height and width are at most 100 and mines is smaller than height times width
   then
     create a game with the given settings and status IDLE
     initialize mines, revealed, and flagged as empty sets
