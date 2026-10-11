@@ -493,11 +493,29 @@ main > section > ul > li {
 
 /* Disclosures */
 
-.help { margin: 0 0 0.5rem; }
+main details.help {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 0.5rem;
+}
 
-.help p {
-  max-width: 36rem;
+main details.help[open] {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  contain: inline-size;
+}
+
+.help ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
   color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.help li {
+  margin: 0.3rem 0;
 }
 
 summary {

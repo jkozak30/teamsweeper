@@ -40,7 +40,28 @@ const visited = reactive(new Map<string, Coordinate>());
 const key = (coord: Coordinate) =>
   `${coord.row},${coord.column}`;
 
+let holdingH = false;
+
+function keyDown(event: KeyboardEvent) {
+  if (event.key.toLowerCase() !== "h") return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (
+    event.target instanceof Element &&
+    event.target.closest("input, textarea, select, [contenteditable]")
+  ) return;
+
+  holdingH = true;
+}
+
+function keyUp(event: KeyboardEvent) {
+  if (event.key.toLowerCase() === "h") holdingH = false;
+}
+
 function click(cell: Cell, event: MouseEvent) {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
   if (props.busy || dragging.value) return;
   if (event.shiftKey) return flag(cell);
   if (props.finished) return emit("clear");
@@ -54,6 +75,11 @@ function click(cell: Cell, event: MouseEvent) {
   }
 }
 
+function highlight(cell: Cell) {
+  if (props.busy || dragging.value) return;
+  emit("highlight", cell.coord);
+}
+
 function flag(cell: Cell) {
   if (props.busy || dragging.value) return;
 
@@ -64,24 +90,45 @@ function flag(cell: Cell) {
   emit("flag", cell.coord, !cell.flagged);
 }
 
+let highlightButton: number | null = null;
+let suppressClick = false;
+
 function begin(cell: Cell, event: PointerEvent) {
-  if (event.button === 0 && !props.busy && !props.finished && !event.shiftKey) {
+  suppressClick = false;
+
+  const highlighting =
+    event.button === 1 ||
+    (event.button === 0 && holdingH);
+
+  if (highlighting) {
+    event.preventDefault();
+    if (props.busy) return;
+
+    highlightButton = event.button;
+    dragging.value = true;
+    visited.clear();
+    visited.set(key(cell.coord), cell.coord);
+    return;
+  }
+
+  if (
+    event.button === 0 &&
+    !props.busy &&
+    !props.finished &&
+    !event.shiftKey
+  ) {
     pressed.value = cell.coord;
     emit("pressing", true);
   }
-  if (event.button !== 1) return;
-
-  event.preventDefault();
-  if (props.busy) return;
-
-  dragging.value = true;
-  visited.clear();
-  visited.set(key(cell.coord), cell.coord);
 }
 
 function enter(cell: Cell, event: PointerEvent) {
-  if (pressed.value && (event.buttons & 1)) pressed.value = cell.coord;
-  if (dragging.value && (event.buttons & 4)) {
+  if (pressed.value && (event.buttons & 1)) {
+    pressed.value = cell.coord;
+  }
+
+  const mask = highlightButton === 0 ? 1 : 4;
+  if (dragging.value && (event.buttons & mask)) {
     visited.set(key(cell.coord), cell.coord);
   }
 }
@@ -92,6 +139,9 @@ function release() {
 }
 
 function cancel() {
+  holdingH = false;
+  highlightButton = null;
+  suppressClick = false;
   release();
   dragging.value = false;
   visited.clear();
@@ -99,10 +149,13 @@ function cancel() {
 
 function end(event: PointerEvent) {
   release();
-  if (!dragging.value || event.button !== 1) return;
+  if (!dragging.value || event.button !== highlightButton) return;
 
   const coords = [...visited.values()];
-  cancel();
+  suppressClick = highlightButton === 0;
+  dragging.value = false;
+  highlightButton = null;
+  visited.clear();
 
   if (props.busy) return;
 
@@ -117,12 +170,16 @@ onMounted(() => {
   window.addEventListener("pointerup", end);
   window.addEventListener("pointercancel", cancel);
   window.addEventListener("blur", cancel);
+  window.addEventListener("keydown", keyDown);
+  window.addEventListener("keyup", keyUp);
 });
 
 onUnmounted(() => {
   window.removeEventListener("pointerup", end);
   window.removeEventListener("pointercancel", cancel);
   window.removeEventListener("blur", cancel);
+  window.removeEventListener("keydown", keyDown);
+  window.removeEventListener("keyup", keyUp);
 });
 
 const names = computed(() => new Map(props.players.map(player => [player.participant, player.name])));
@@ -149,7 +206,7 @@ watchEffect(() => {
   for (const id of pressedCells) if (!next.has(id)) pressedCells.delete(id);
   for (const id of next) if (!pressedCells.has(id)) pressedCells.add(id);
 }, { flush: "sync" });
-provide(boardContext, { props, pressedCells, visited, names, click, flag, begin, enter, release });
+provide(boardContext, { props, pressedCells, visited, names, click, flag, highlight, begin, enter, release });
 </script>
 
 <template>

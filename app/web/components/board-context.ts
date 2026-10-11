@@ -21,6 +21,7 @@ export const boardContext: InjectionKey<{
   names: Ref<Map<string, string>>;
   click: (cell: Cell, event: MouseEvent) => void;
   flag: (cell: Cell) => void;
+  highlight: (cell: Cell) => void;
   begin: (cell: Cell, event: PointerEvent) => void;
   enter: (cell: Cell, event: PointerEvent) => void;
   release: () => void;

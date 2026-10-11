@@ -91,10 +91,13 @@ function openSettings(event: Event) {
   <section>
     <details class="help">
       <summary>How to play</summary>
-      <p>
-        Click to reveal; right-click or Shift-click to flag.
-        Click a number to chord. Middle-click or drag to highlight.
-      </p>
+      <ul>
+        <li>Left-click to reveal.</li>
+        <li>Right-click or Shift-click to flag.</li>
+        <li>Left-click a number to chord.</li>
+        <li>Middle-click or H+left-click to highlight.</li>
+        <li>Middle-drag or H+left-drag to highlight multiple cells.</li>
+      </ul>
     </details>
 
     <div class="board-container">
