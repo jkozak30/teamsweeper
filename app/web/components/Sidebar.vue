@@ -8,6 +8,7 @@ type Lobby = TeamsweeperWireHttp["/rooms/current"]["output"];
 
 const props = defineProps<{
   lobby: Lobby | null;
+  currentGame: string | null;
   screen: "lobby" | "game";
   busy: boolean;
   colors: PlayerColors;
@@ -31,12 +32,25 @@ function resultLabel(row: RankingState["rows"][number]) {
     "3BV": " 3BV",
     Clicks: " moves",
     "3BV/s": " 3BV/s",
-    Efficiency: " 3BV/move",
+    Efficiency: "%",
   };
-  const value = Number(row.value.toFixed(2));
-  return `${category?.status === "WON" ? "✓ Win" : category?.status === "LOST" ? "✗ Loss" : "Result"} · ${settings} · ${value}${units[rankings.value.metric] ?? ""}`;
+  const value = rankings.value.displayedMetric === "Efficiency"
+    ? Math.round(row.value * 100)
+    : Number(row.value.toFixed(2));
+  return `${settings} · ${value}${units[rankings.value.displayedMetric] ?? ""}`;
 }
 
+function outcome(row: RankingState["rows"][number]) {
+  return typeof row.category === "object" && row.category !== null ? row.category.status : null;
+}
+
+function resultClass(row: RankingState["rows"][number]) {
+  const won = outcome(row) === "WON";
+  return row.item === props.currentGame ? (won ? "current-win" : "current-loss")
+    : won ? "past-win" : "past-loss";
+}
+
+const pages = computed(() => Math.max(1, Math.ceil(rankings.value.total / 10)));
 const name = ref("");
 const code = ref("");
 
@@ -51,32 +65,34 @@ const currentName = computed(() =>
   <aside>
     <h1>Teamsweeper</h1>
 
-    <p v-if="lobby">{{ currentName }} (you)</p>
+    <p v-if="lobby" class="identity">
+      <img class="icon" src="/icons/person.svg" alt="" />
+      {{ currentName }} <small>(you)</small>
+    </p>
 
     <fieldset v-else :disabled="busy">
       <legend>Enter a room</legend>
 
-      <label>
-        Your name
-        <input v-model="name" autocomplete="nickname" />
-      </label>
-
-      <form @submit.prevent="emit('create', name)">
-        <button :disabled="!name.trim()">Create room</button>
+      <form class="entry-row" @submit.prevent="emit('create', name)">
+        <label>
+          Your name
+          <input v-model="name" autocomplete="nickname" />
+        </label>
+        <button :disabled="!name.trim()">Create</button>
       </form>
 
-      <form @submit.prevent="emit('join', name, code)">
+      <h2 class="entry-or"><span>—</span><span>OR</span><span>—</span></h2>
+
+      <form class="entry-row" @submit.prevent="emit('join', name, code)">
         <label>
           Room code
           <input v-model="code" required />
         </label>
-        <button :disabled="!name.trim() || !code.trim()">
-          Join room
-        </button>
+        <button :disabled="!name.trim() || !code.trim()">Join</button>
       </form>
     </fieldset>
 
-    <section v-if="lobby && screen === 'game'">
+    <section v-if="lobby && screen === 'game'" class="participants">
       <h2>Participants</h2>
 
       <ul>
@@ -101,44 +117,73 @@ const currentName = computed(() =>
         </li>
       </ul>
     </section>
-    <section v-if="lobby">
+    <section v-if="lobby" class="past-results">
       <h2>Past results</h2>
-      <label>
-        Rank by
-        <select v-model="rankings.metric">
-          <option v-for="option in rankingMetrics" :key="option.metric" :value="option.metric">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-      <label>
-        Order
-        <select v-model="rankings.ascending">
-          <option :value="true">Lowest first</option>
-          <option :value="false">Highest first</option>
-        </select>
-      </label>
-      <label>
-        Outcome
-        <select v-model="rankings.status">
-          <option value="">Wins and losses</option>
-          <option value="WON">Wins</option>
-          <option value="LOST">Losses</option>
-        </select>
-      </label>
-      <label><input v-model="rankings.matching" type="checkbox" /> Match board settings</label>
-      <p v-if="rankings.loading" role="status">Loading rankings…</p>
-      <p v-else-if="rankings.error" role="status">{{ rankings.error }}</p>
-      <p v-else-if="!rankings.rows.length">No recorded results{{ rankings.matching ? ' for these settings' : '' }}.</p>
+      <div class="ranking-filters">
+        <label class="inline-field">
+          Rank by
+          <select v-model="rankings.metric">
+            <option v-for="option in rankingMetrics" :key="option.metric" :value="option.metric">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+        <button class="filter-button" :aria-label="rankings.ascending ? 'Lowest first; switch to highest first' : 'Highest first; switch to lowest first'"
+          @click="rankings.ascending = !rankings.ascending">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path :d="rankings.ascending ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'"
+              fill="none" stroke="currentColor" stroke-width="2" />
+          </svg>
+        </button>
+        <button class="filter-button" :aria-pressed="rankings.wins" aria-label="Include wins"
+          @click="rankings.wins = !rankings.wins">
+          <img class="icon" src="/icons/win.svg" alt="" />
+        </button>
+        <button class="filter-button" :aria-pressed="rankings.losses" aria-label="Include losses"
+          @click="rankings.losses = !rankings.losses">
+          <img class="icon" src="/icons/loss.svg" alt="" />
+        </button>
+        <button
+          class="filter-button"
+          :aria-pressed="rankings.matching"
+          aria-label="Match current board settings"
+          @click="rankings.matching = !rankings.matching"
+        >
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="1"
+              fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="M9 3v18M15 3v18M3 9h18M3 15h18"
+              fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+        </button>
+
+      </div>
+      <p v-if="rankings.error" role="status">{{ rankings.error }}</p>
+      <p v-else-if="rankings.loaded && !rankings.rows.length" class="empty-results">No recorded results.</p>
       <ul>
-        <li v-for="row in rankings.rows" :key="row.item">
+        <li v-for="row in rankings.rows" :key="row.item" :class="resultClass(row)">
+          <img
+            v-if="typeof row.category === 'object' && row.category !== null &&
+              (row.category.status === 'WON' || row.category.status === 'LOST')"
+            class="icon"
+            :src="`/icons/${row.category.status === 'WON' ? 'win' : 'loss'}.svg`"
+            :alt="row.category.status === 'WON' ? 'Win' : 'Loss'"
+          />
           #{{ row.rank }} · {{ resultLabel(row) }}
         </li>
       </ul>
-      <p>
-        <button :disabled="rankings.loading || rankings.page === 1" @click="rankings.page--">Previous</button>
-        Page {{ rankings.page }}
-        <button :disabled="rankings.loading || !rankings.more" @click="rankings.page++">Next</button>
+      <p class="pagination">
+        <button
+          aria-label="Previous page"
+          :disabled="rankings.loading || rankings.page === 1"
+          @click="rankings.page--"
+        >←</button>
+        {{ rankings.page }} / {{ pages }}
+        <button
+          aria-label="Next page"
+          :disabled="rankings.loading || !rankings.more"
+          @click="rankings.page++"
+        >→</button>
       </p>
     </section>
   </aside>
@@ -152,5 +197,6 @@ const currentName = computed(() =>
   border: 1px solid #555;
   border-radius: 50%;
   margin-right: 0.35rem;
+  vertical-align: middle;
 }
 </style>

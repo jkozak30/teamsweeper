@@ -27,7 +27,7 @@ const emit = defineEmits<{
 
 <template>
   <section>
-    <h2>Lobby</h2>
+    <h2 class="page-title">Lobby</h2>
 
     <h3>Participants</h3>
     <ul>
@@ -52,19 +52,21 @@ const emit = defineEmits<{
       </li>
     </ul>
 
-    <form v-if="isHost" @submit.prevent="emit('start')">
+    <form id="lobby-start" v-if="isHost" @submit.prevent="emit('start')">
       <GameSettings
         v-model:settings="settings"
         :busy="busy"
       />
 
-      <button :disabled="busy">
-        {{ hasGame ? 'Start new game' : 'Start game' }}
-      </button>
+
     </form>
 
     <p v-else>The host can start a game.</p>
 
+    <div class="action-row">
+      <button v-if="isHost" class="start-button" type="submit" form="lobby-start" :disabled="busy">
+        {{ hasGame ? 'Start new game' : 'Start game' }}
+      </button>
     <button
       v-if="hasGame"
       :disabled="busy"
@@ -73,9 +75,10 @@ const emit = defineEmits<{
       Return to game
     </button>
 
-    <button :disabled="busy" @click="emit('leave')">
+    <button class="leave-button" :disabled="busy" @click="emit('leave')">
       Leave room
     </button>
+    </div>
   </section>
 </template>
 
@@ -87,5 +90,6 @@ const emit = defineEmits<{
   border: 1px solid #555;
   border-radius: 50%;
   margin-right: 0.35rem;
+  vertical-align: middle;
 }
 </style>

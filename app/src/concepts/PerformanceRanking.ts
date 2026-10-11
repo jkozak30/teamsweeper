@@ -142,6 +142,11 @@ export class PerformanceRankingConcept {
     return ranked.slice((from ?? 1) - 1, to ?? ranked.length);
   }
 
+  async _count({ scope, category, metric }: { scope: string; category?: Category; metric: string }) {
+    const rows = await this._rank({ scope, category, metric, ascending: true });
+    return { total: rows.length };
+  }
+
   #ensureIndex() {
     this.index ??= this.results.createIndex({ scope: 1, category: 1 }).catch(error => {
       this.index = null;

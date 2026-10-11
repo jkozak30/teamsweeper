@@ -17,16 +17,19 @@ export const rankingMetrics = [
   { metric: "3BV", label: "3BV", field: "bv", ascending: false },
   { metric: "Clicks", label: "Moves", field: "clicks", ascending: true },
   { metric: "3BV/s", label: "Speed (3BV/s)", field: "speed", ascending: false },
-  { metric: "Efficiency", label: "Efficiency (3BV/move)", field: "efficiency", ascending: false },
+  { metric: "Efficiency", label: "Efficiency (%)", field: "efficiency", ascending: false },
 ] as const;
 
 export interface RankingState {
   metric: string;
   ascending: boolean;
   matching: boolean;
-  status: "" | "WON" | "LOST";
+  wins: boolean;
+  losses: boolean;
+  total: number;
   page: number;
   rows: TeamsweeperWireHttp["/rankings/rank"]["output"]["ranking"]["results"];
+  displayedMetric: string;
   more: boolean;
   loading: boolean;
   refreshing: boolean;
@@ -46,8 +49,8 @@ export function useTeamsweeperController() {
   const status = ref("");
 
   const rankings = ref<RankingState>({
-    metric: "Time", ascending: true, matching: true, status: "WON", page: 1,
-    rows: [], more: false, loading: false, refreshing: false, loaded: false, error: "",
+    metric: "Time", ascending: true, matching: true, wins: true, losses: false, total: 0, page: 1,
+    rows: [], displayedMetric: "Time", more: false, loading: false, refreshing: false, loaded: false, error: "",
   });
   let rankingRequest = 0;
   let lastRankingRead = 0;
@@ -97,7 +100,7 @@ export function useTeamsweeperController() {
   let disposed = false;
 
   const queue = createActionQueue(
-    () => !disposed && !busy.value && !syncProblem.value && !!gameState.value?.game,
+    () => !disposed && !busy.value && !syncProblem.value && !!lobby.value,
     pending => {
       queuedActions.value = pending.length;
       pendingCells.value = pending.filter((cell): cell is string => cell !== null);
@@ -137,6 +140,7 @@ export function useTeamsweeperController() {
     rankingRequest++;
     savedGame = "";
     rankings.value.rows = [];
+    rankings.value.total = 0;
     rankings.value.more = rankings.value.loading = rankings.value.refreshing = false;
     rankings.value.error = "";
     rankings.value.loaded = false;
@@ -177,25 +181,40 @@ export function useTeamsweeperController() {
     if (!room || disposed) return;
     const request = ++rankingRequest;
     const state = rankings.value;
+    const metric = state.metric;
+    if (!state.wins && !state.losses) {
+      state.rows = [];
+      state.total = 0;
+      state.more = state.loading = state.refreshing = false;
+      state.loaded = true;
+      state.error = "";
+      return;
+    }
+    const outcome = state.wins === state.losses ? "" : state.wins ? "WON" : "LOST";
     state.refreshing = true;
     state.loading = !state.loaded;
     state.error = "";
     lastRankingRead = Date.now();
     try {
       const result = await api.rankings.rank({
-        metric: state.metric, ascending: state.ascending,
-        ...(state.matching || state.status ? { category: {
+        metric, ascending: state.ascending,
+        ...(state.matching || outcome ? { category: {
           ...(state.matching ? { settings: { ...(gameState.value?.snapshot?.settings ?? settings.value) } } : {}),
-          ...(state.status ? { status: state.status } : {}),
+          ...(outcome ? { status: outcome } : {}),
         } } : {}),
-        from: (state.page - 1) * 10 + 1, to: state.page * 10 + 1,
+        from: (state.page - 1) * 10 + 1, to: state.page * 10,
       }, { timeoutMs: 2500 });
       if (disposed || request !== rankingRequest || lobby.value?.room !== room) return;
       check(result);
       if ("error" in result) return;
+      state.displayedMetric = metric;
+      state.rows = result.ranking.results.slice(0, 10);
       state.loaded = true;
       state.rows = result.ranking.results.slice(0, 10);
-      state.more = result.ranking.results.length > 10;
+      state.total = result.ranking.total;
+      state.more = state.page * 10 < state.total;
+      const lastPage = Math.max(1, Math.ceil(state.total / 10));
+      if (state.page > lastPage) state.page = lastPage;
     } catch {
       if (!disposed && request === rankingRequest && lobby.value?.room === room) {
         state.error = "Could not load rankings. Retry or wait for the next refresh.";
@@ -208,16 +227,32 @@ export function useTeamsweeperController() {
   watch(() => rankings.value.metric, metric => {
     rankings.value.ascending = rankingMetrics.find(value => value.metric === metric)?.ascending ?? true;
   }, { flush: "sync" });
-  watch([() => lobby.value?.room, () => rankings.value.metric, () => rankings.value.ascending,
-    () => rankings.value.status, () => rankings.value.matching, () => rankings.value.matching
-      ? JSON.stringify(gameState.value?.snapshot?.settings ?? settings.value) : ""], () => {
-    rankings.value.rows = [];
-    rankings.value.loaded = false;
-    rankings.value.more = false;
+  watch([
+    () => lobby.value?.room,
+    () => rankings.value.metric,
+    () => rankings.value.ascending,
+    () => rankings.value.wins,
+    () => rankings.value.losses,
+    () => rankings.value.matching,
+    () => rankings.value.matching
+      ? JSON.stringify(gameState.value?.snapshot?.settings ?? settings.value)
+      : "",
+  ], (next, previous) => {
+    // Clear old results only when changing rooms.
+    if (next[0] !== previous[0]) {
+      rankings.value.rows = [];
+      rankings.value.total = 0;
+      rankings.value.loaded = false;
+      rankings.value.more = false;
+    }
+
     if (rankings.value.page !== 1) rankings.value.page = 1;
     else void refreshRankings();
   });
-  watch(() => rankings.value.page, () => { rankings.value.rows = []; rankings.value.loaded = false; void refreshRankings(); });
+
+  watch(() => rankings.value.page, () => {
+    void refreshRankings();
+  });
 
   function refreshState(
     scope: "full" | "game" = "full",
@@ -236,6 +271,7 @@ export function useTeamsweeperController() {
     const obsolete = () => disposed || version !== revision;
 
     pendingRead = (async () => {
+      let nextRoom = lobby.value;
       if (scope === "full") {
         const room = await api.rooms.current({}, options);
         if (obsolete()) return;
@@ -253,10 +289,10 @@ export function useTeamsweeperController() {
           return;
         }
 
-        lobby.value = room;
+        nextRoom = room;
       }
 
-      if (!lobby.value) return;
+      if (!nextRoom) return;
 
       const knownGame = gameState.value?.game ?? "";
       const game = await api.game.updates({
@@ -304,6 +340,8 @@ export function useTeamsweeperController() {
           throw error;
         }
       }
+      // Publish the room after its game state is ready.
+      lobby.value = nextRoom;
       // Read saved completed games once; if recording is still pending, the next poll retries.
       if (gameState.value?.game && ["WON", "LOST"].includes(gameState.value.snapshot?.status ?? "") && savedGame !== gameState.value.game) {
         const item = gameState.value.game;
@@ -395,7 +433,9 @@ export function useTeamsweeperController() {
           gameState.value = before;
         }
 
-        report(error instanceof Error ? error.message : "NETWORK_ERROR");
+        if (!(error instanceof Error && error.message === "QUIET_MOVE")) {
+          report(error instanceof Error ? error.message : "NETWORK_ERROR");
+        }
       }
     } finally {
       clearTimeout(timeout);
@@ -425,26 +465,37 @@ export function useTeamsweeperController() {
     }
   }
 
-  function createRoom(name: string) {
-    return run("room", async options => {
+  async function createRoom(name: string) {
+    let created = false;
+
+    await run("room", async options => {
       check(await api.rooms.create({ name: name.trim() }, options));
-      status.value = "Room created. Share the code with another player.";
+      created = true;
     });
+
+    if (created && lobby.value && !syncProblem.value) {
+      status.value = "Room created. Share the code with another player.";
+    }
   }
 
-  function joinRoom(name: string, code: string) {
-    return run("room", async options => {
+  async function joinRoom(name: string, code: string) {
+    let joined = false;
+
+    await run("room", async options => {
       check(await api.rooms.join({
         name: name.trim(),
         code: code.trim().toUpperCase(),
       }, options));
-
-      status.value = "Joined the room.";
+      joined = true;
     });
+
+    if (joined && lobby.value && !syncProblem.value) {
+      status.value = "Joined the room.";
+    }
   }
 
   function leaveRoom() {
-    return run("room", async options => {
+    return enqueue(() => run("room", async options => {
       const result = await api.rooms.leave({}, options);
 
       if (!("error" in result && result.error === "UNAUTHORIZED")) {
@@ -453,11 +504,11 @@ export function useTeamsweeperController() {
 
       clearRoom();
       status.value = "You have left the room.";
-    });
+    }));
   }
 
   function startGame() {
-    return run("room", async options => {
+    return enqueue(() => run("room", async options => {
       if (!lobby.value || !isHost.value) return;
 
       check(await api.game.start({
@@ -466,7 +517,7 @@ export function useTeamsweeperController() {
       }, options));
 
       screen.value = "game";
-    });
+    }));
   }
 
   function performMove(
@@ -489,6 +540,7 @@ export function useTeamsweeperController() {
         : kind === "reveal"
         ? await api.game.reveal({ game, coord, since }, options)
         : await api.game.chord({ game, coord, since }, options);
+      if ("error" in result && result.error === "CONFLICT") throw new Error("QUIET_MOVE");
       check(result);
       if ("error" in result) return;
       const update = result.changes.update;

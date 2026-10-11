@@ -89,15 +89,13 @@ function openSettings(event: Event) {
 
 <template>
   <section>
-    <h2>Game: {{ snapshot.status }}</h2>
-
-    <p>
-      Click to reveal. Right-click or Shift-click to flag.
-      Click a revealed number to chord.
-      Middle-click to toggle your highlight, or hold the middle button
-      and drag across cells to highlight them.
-      Left-click or right-click clears your highlights before making a move.
-    </p>
+    <details class="help">
+      <summary>How to play</summary>
+      <p>
+        Click to reveal; right-click or Shift-click to flag.
+        Click a number to chord. Middle-click or drag to highlight.
+      </p>
+    </details>
 
     <div class="board-container">
       <div class="game-frame">
@@ -137,27 +135,26 @@ function openSettings(event: Event) {
       </div>
     </div>
 
-    <section v-if="result">
-      <h3>Results</h3>
+    <section v-if="result" class="results">
+      <h3 :class="snapshot.status === 'WON' ? 'win' : 'loss'">
+        <img
+          class="icon"
+          :src="`/icons/${snapshot.status === 'WON' ? 'win' : 'loss'}.svg`"
+          alt=""
+        />
+        {{ snapshot.status === 'WON' ? 'WIN !!!' : 'LOSS :(' }}
+      </h3>
 
-      <dl>
-        <dt>Time</dt>
-        <dd>{{ result.time.toFixed(2) }} seconds</dd>
-
-        <dt>3BV</dt>
-        <dd>{{ result.bv }}</dd>
-
-        <dt>Moves</dt>
-        <dd>{{ result.clicks }}</dd>
-
-        <dt>Speed</dt>
-        <dd>{{ result.speed.toFixed(2) }} 3BV units/second</dd>
-
-        <dt>Efficiency</dt>
-        <dd>{{ result.efficiency.toFixed(2) }} 3BV units/move</dd>
-      </dl>
+      <div class="result-lines">
+        <p><strong>Time:</strong> <b>{{ result.time.toFixed(2) }}</b> sec</p>
+        <p><strong>3BV:</strong> {{ result.bv }}</p>
+        <p><strong>3BV/s:</strong> {{ result.speed.toFixed(2) }}</p>
+        <p><strong>Clicks:</strong> {{ result.clicks }}</p>
+        <p><strong>Efficiency:</strong> {{ (result.efficiency * 100).toFixed(0) }}%</p>
+      </div>
     </section>
 
+    <div class="game-actions">
     <form id="new-game" v-if="isHost" @submit.prevent="emit('start')">
       <details v-if="finished" @invalid.capture="openSettings">
         <summary>Adjust settings</summary>
@@ -168,23 +165,32 @@ function openSettings(event: Event) {
         />
       </details>
 
-      <button :disabled="busy">Start new game</button>
     </form>
+
+    <div class="action-row">
+      <button v-if="isHost" class="start-button" type="submit" form="new-game" :disabled="busy">Start new game</button>
 
     <button :disabled="busy" @click="emit('lobby')">
       Return to lobby
     </button>
 
-    <button :disabled="busy" @click="emit('leave')">
+    <button class="leave-button" :disabled="busy" @click="emit('leave')">
       Leave room
     </button>
+    </div>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.board-container { overflow-x: auto; padding-bottom: 0.5rem; }
+.board-container {
+  overflow: visible;
+  padding-bottom: 0.5rem;
+}
 .game-frame {
   width: max-content;
+  margin-left: 0;
+  margin-right: 0;
   min-width: 194px;
   padding: 10px;
   background: #c6c6c6;

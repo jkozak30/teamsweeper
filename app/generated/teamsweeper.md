@@ -74,6 +74,7 @@ Defined in [PerformanceRanking](../design/concepts/PerformanceRanking.md), line 
 #### Queries
 
 - `_rank(scope: Scope, category?: Category, metric: Metric, ascending: Flag, from?: Number, to?: Number) : many (item: Item, value: Number, rank: Number)`
+- `_count(scope: Scope, category?: Category, metric: Metric) : one (total: Number)`
 - `_get(item: Item) : optional (scope: Scope, category: Category, measurements: Measurements)`
 
 #### Instances
@@ -147,9 +148,9 @@ Concrete types:
 - `boardCursors(knownGame: String, game: MinesweeperPlaying.Game, cursors: Annotating.Cursors) : Annotating.Cursors` — [Game](../design/compositions/Game.md), line 64.
 - `boardSince(knownGame: String, game: MinesweeperPlaying.Game, since: Number) : Number` — [Game](../design/compositions/Game.md), line 61.
 - `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 30.
-- `rankingCategory(category: GameCategory | String | null) : GameCategory | String | undefined` — [Rankings](../design/compositions/Rankings.md), line 29.
-- `resultCategory(settings: MinesweeperPlaying.Settings, status: MinesweeperPlaying.Status) : PerformanceRanking.Category` — [Rankings](../design/compositions/Rankings.md), line 32.
-- `resultMeasurements(time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number) : PerformanceRanking.Measurements` — [Rankings](../design/compositions/Rankings.md), line 35.
+- `rankingCategory(category: GameCategory | String | null) : GameCategory | String | undefined` — [Rankings](../design/compositions/Rankings.md), line 31.
+- `resultCategory(settings: MinesweeperPlaying.Settings, status: MinesweeperPlaying.Status) : PerformanceRanking.Category` — [Rankings](../design/compositions/Rankings.md), line 34.
+- `resultMeasurements(time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number) : PerformanceRanking.Measurements` — [Rankings](../design/compositions/Rankings.md), line 37.
 
 ## Views
 
@@ -296,8 +297,9 @@ Authored path: `Rankings.Ranked`.
 - Covered by [Rankings](../design/compositions/Rankings.md), line 11.
 
 ```former
-Former "the room's ranked results" — inputs (room, category, metric, ascending, from, to); bindings (item, value, rank, resultCategory, measurements); promises exactly one record — forms:
+Former "the room's ranked results" — inputs (room, category, metric, ascending, from, to); bindings (item, value, rank, resultCategory, measurements, total); promises exactly one record — forms:
   a record of
+    where PerformanceRanking._count (category, metric, scope: room) has (total)
     results: each PerformanceRanking._rank (ascending, category, from, metric, scope: room, to) has (item, rank, value)
       where PerformanceRanking._get (item) has (category: resultCategory, measurements, scope: room)
       form a record of
@@ -306,6 +308,7 @@ Former "the room's ranked results" — inputs (room, category, metric, ascending
         measurements
         rank
         value
+    total
 ```
 
 ### the visible game state
@@ -1201,7 +1204,7 @@ then
 
 Authored path: `Rankings.Rank`.
 - Covered by [Rankings](../design/compositions/Rankings.md), line 9.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 24.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 26.
 
 ```reaction
 when RequestBoundary.request (ascending, category, from, metric, path: "/rankings/rank", requestId, session, to)
@@ -1213,7 +1216,7 @@ then
 
 Authored path: `Rankings.Rank`.
 - Covered by [Rankings](../design/compositions/Rankings.md), line 9.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 24.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Rank
@@ -1228,7 +1231,7 @@ then
 
 Authored path: `Rankings.Rank`.
 - Covered by [Rankings](../design/compositions/Rankings.md), line 9.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 24.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Rank
@@ -1244,7 +1247,7 @@ then
 
 Authored path: `Rankings.Rank`.
 - Covered by [Rankings](../design/compositions/Rankings.md), line 9.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 24.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Rank
@@ -1331,8 +1334,8 @@ then
 ### Rankings.Result
 
 Authored path: `Rankings.Result`.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 16.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 25.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 18.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 27.
 
 ```reaction
 when RequestBoundary.request (item, path: "/rankings/result", requestId, session)
@@ -1343,8 +1346,8 @@ then
 ### Rankings.Result:inactive#2
 
 Authored path: `Rankings.Result`.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 16.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 25.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 18.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 27.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Result
@@ -1358,8 +1361,8 @@ then
 ### Rankings.Result:member-result#2
 
 Authored path: `Rankings.Result`.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 16.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 25.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 18.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 27.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Result
@@ -1374,8 +1377,8 @@ then
 ### Rankings.Result:missing-or-other-room#2
 
 Authored path: `Rankings.Result`.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 16.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 25.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 18.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 27.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Result
@@ -1390,8 +1393,8 @@ then
 ### Rankings.Result:room-unavailable#2
 
 Authored path: `Rankings.Result`.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 16.
-- Covered by [Rankings](../design/compositions/Rankings.md), line 25.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 18.
+- Covered by [Rankings](../design/compositions/Rankings.md), line 27.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Rankings.Result

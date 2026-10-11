@@ -137,6 +137,7 @@ test("reloads, polls, and refused moves preserve saved wins; historical reads ne
     expect(result.data).toMatchObject({ item: game, result: { category: original.category, measurements: original.measurements } });
     const rows = await post("rankings/rank", { metric: "Clicks", ascending: true }, alice.cookie);
     expect(rows.status).toBe(200);
+  expect(rows.data.ranking.total).toBe(1);
     expect(rows.data.ranking.results).toMatchObject([{ item: game, value: 2, rank: 1 }]);
   } finally {
     MinesweeperPlayingConcept.prototype._getResult = computeResult;
@@ -163,13 +164,14 @@ test("ranking requests forward metric, category, direction, and range, with defa
   for (const [item, category, clicks, time] of [["a", "standard", 2, 8], ["b", "standard", 1, 9], ["c", "other", 3, 7]] as const) {
     await ranking.record({ item, scope: alice.room, category, measurements: [{ metric: "Clicks", value: clicks }, { metric: "Time", value: time }] });
   }
-  for (const [body, expected] of [
-    [{ metric: "Clicks", ascending: true }, [{ item: "b", value: 1, rank: 1 }, { item: "a", value: 2, rank: 2 }, { item: "c", value: 3, rank: 3 }]],
-    [{ metric: "Time", ascending: false, category: "standard", from: 2, to: 2 }, [{ item: "a", value: 8, rank: 2 }]],
-    [{ metric: "missing", ascending: true }, []],
+  for (const [body, expected, total] of [
+    [{ metric: "Clicks", ascending: true }, [{ item: "b", value: 1, rank: 1 }, { item: "a", value: 2, rank: 2 }, { item: "c", value: 3, rank: 3 }], 3],
+    [{ metric: "Time", ascending: false, category: "standard", from: 2, to: 2 }, [{ item: "a", value: 8, rank: 2 }], 2],
+    [{ metric: "missing", ascending: true }, [], 0],
   ] as const) {
     const result = await post("rankings/rank", body, bob.cookie);
     expect(result.status).toBe(200);
+    expect(result.data.ranking.total).toBe(total);
     expect(result.data.ranking.results).toHaveLength(expected.length);
     expect(result.data.ranking.results).toMatchObject(expected);
   }
@@ -187,6 +189,7 @@ test("room isolation applies to winning moves, rankings, and saved results", asy
   const other = await win(outsider);
   const rows = await post("rankings/rank", { metric: "Clicks", ascending: true }, alice.cookie);
   expect(rows.status).toBe(200);
+  expect(rows.data.ranking.total).toBe(1);
   expect(rows.data.ranking.results.map((row: { item: string }) => row.item)).toEqual([game]);
   for (const item of [other.game, "unknown"]) {
     const result = await post("rankings/result", { item }, alice.cookie);

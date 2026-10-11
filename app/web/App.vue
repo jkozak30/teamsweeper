@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import Sidebar from "./components/Sidebar.vue";
 import LobbyView from "./components/Lobby.vue";
 import GameView from "./components/Game.vue";
@@ -13,7 +12,6 @@ const {
   settings,
   status,
   busy,
-  controlsPending,
   pendingCells,
   syncProblem,
   isHost,
@@ -29,39 +27,32 @@ const {
   clearHighlights,
   copyCode,
 } = useTeamsweeperController();
-
-const layoutWidth = computed(() => {
-  const snapshot = gameState.value?.snapshot;
-
-  if (screen.value !== "game" || !snapshot) return "40rem";
-
-  const columns = snapshot.settings.width;
-  // Sidebar, layout gap, cells, and the beveled board frame.
-  return `max(40rem, calc(16rem + ${columns * 24}px + 36px))`;
-});
 </script>
 
 <template>
-  <div class="layout" :style="{ width: layoutWidth }">
+  <div class="layout">
     <Sidebar
       v-model:rankings="rankings"
       :lobby="lobby"
+      :current-game="gameState?.game ?? null"
       :colors="colors"
       :screen="screen"
-      :busy="busy || controlsPending"
+      :busy="busy"
       @create="createRoom"
       @join="joinRoom"
     />
 
     <main>
       <template v-if="lobby">
-        <p>
-          Code: <strong>{{ lobby.code }}</strong>
+        <p class="room-bar">
+          <strong>{{ lobby.code }}</strong>
           <button
-            :disabled="busy || controlsPending"
+            class="copy-button"
+            aria-label="Copy room code"
+            :disabled="busy"
             @click="copyCode"
           >
-            Copy code
+            <span class="icon copy-icon" aria-hidden="true"></span>
           </button>
         </p>
 
@@ -72,7 +63,7 @@ const layoutWidth = computed(() => {
           :colors="colors"
           :is-host="isHost"
           :has-game="!!gameState?.snapshot"
-          :busy="busy || controlsPending"
+          :busy="busy"
           @start="startGame"
           @return="screen = 'game'"
           @leave="leaveRoom"
@@ -86,7 +77,7 @@ const layoutWidth = computed(() => {
           :players="lobby.members.participants"
           :colors="colors"
           :is-host="isHost"
-          :busy="busy || controlsPending || syncProblem"
+          :busy="busy || syncProblem"
           :board-busy="busy || syncProblem"
           :pending-cells="pendingCells"
           @reveal="move('reveal', $event)"
@@ -102,7 +93,6 @@ const layoutWidth = computed(() => {
       </template>
 
       <p v-else>Create or join a room to play.</p>
-      <p v-if="busy && !gameState?.snapshot">Loading...</p>
 
       <p v-if="delayed" role="status">
         Updates are delayed. The displayed board may be out of date.
@@ -116,17 +106,22 @@ const layoutWidth = computed(() => {
 <style scoped>
 .layout {
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr);
-  max-width: calc(100vw - 2rem);
-  gap: 2rem;
+  grid-template-columns: clamp(20.5rem, 28vw, 24rem) minmax(max-content, 1fr);
+  width: max-content;
+  min-width: 100%;
+  gap: 1rem;
   align-items: start;
+  padding: 20px;
+  box-sizing: border-box;
+  background: #1d232b;
+  border-radius: 0;
 }
 
 main {
   min-width: 0;
 }
 
-@media (max-width: 650px) {
+@media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
   }

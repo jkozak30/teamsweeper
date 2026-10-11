@@ -163,7 +163,7 @@ export type TeamsweeperWire = {
       "ascending": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["ascending"]>>;
       "category"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["rankingCategory"]["fn"]>[0], ["category"]>>;
       "from"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["from"]>>;
-      "metric": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["metric"]>>;
+      "metric": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_count"]>[0], ["metric"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["metric"]>]>>;
       "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
       "to"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["to"]>>;
     };
@@ -176,6 +176,7 @@ export type TeamsweeperWire = {
           "rank": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["rank"]>>;
           "value": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["value"]>>;
         }[];
+        "total": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_count"]>>>, ["total"]>>;
       };
     };
     error: { error: AppWideError | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
@@ -390,7 +391,7 @@ export type TeamsweeperWireHttp = {
       "ascending": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["ascending"]>>;
       "category"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["rankingCategory"]["fn"]>[0], ["category"]>>;
       "from"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["from"]>>;
-      "metric": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["metric"]>>;
+      "metric": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_count"]>[0], ["metric"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["metric"]>]>>;
       "to"?: Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>[0], ["to"]>>;
     };
     output: {
@@ -402,6 +403,7 @@ export type TeamsweeperWireHttp = {
           "rank": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["rank"]>>;
           "value": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_rank"]>>>, ["value"]>>;
         }[];
+        "total": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["PerformanceRanking"]["_count"]>>>, ["total"]>>;
       };
     };
     error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };

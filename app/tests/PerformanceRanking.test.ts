@@ -198,3 +198,19 @@ test("partial object category filters select settings or outcome before ranges",
     .toEqual([{ item: "game-1", value: 40, rank: 2 }]);
   expect(await rank({ category: { settings: { width: 8 } } })).toEqual([]);
 });
+
+
+test("counts match filtered rankings before paging, including empty and missing-metric groups", async () => {
+  await ranking.record(result);
+  await ranking.record({ ...result, item: "loss", category: { ...category, status: "LOST" } });
+  await ranking.record({ ...result, item: "other-room", scope: "room-2" });
+  await ranking.record({ ...result, item: "no-time", measurements: [{ metric: "Clicks", value: 1 }] });
+  const filters: Partial<Parameters<PerformanceRankingConcept["_count"]>[0]>[] = [{}, { category: { status: "WON" } }, { category: { status: "LOST" } },
+    { category: { settings: category.settings } }, { metric: "missing" }, { scope: "missing" }];
+  for (const filter of filters) {
+    const input = { scope: "room-1", metric: "Time", ...filter };
+    expect(await ranking._count(input)).toEqual({ total: (await rank(input)).length });
+  }
+  expect(await ranking._count({ scope: "room-1", metric: "Time" })).toEqual({ total: 2 });
+  await expect(ranking._count({ scope: "", metric: "Time" })).rejects.toBeInstanceOf(InvalidRanking);
+});

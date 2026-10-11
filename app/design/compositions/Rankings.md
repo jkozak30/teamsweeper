@@ -9,8 +9,10 @@ LOST. Unfinished games are not recorded.
 Active members [rank saved games](reaction:Rankings.Rank) in their open room.
 Sessioning resolves the participant, and Game.ActiveRoom supplies scope; callers cannot choose another room.
 The [ranking former](former:Rankings.Ranked) returns item, value, rank, category, and 
-measurements for each result. Requests select metric and ascending direction, optionally a
-category filter containing board settings and/or outcome (WON/LOST), and inclusive 1-based from/to positions.
+measurements for each result, plus total matching results before the position range.
+The UI uses total for exact ten-result page counts; an empty result set has total zero. 
+Requests select metric and ascending direction, optionally a category filter containing 
+board settings and/or outcome (WON/LOST), and inclusive 1-based from/to positions.
 Omitted bounds retain the concept defaults; category matching and shared-rank calculation occur before slicing.
 
 Active members [retrieve a saved result](reaction:Rankings.Result) by item, including previous games.

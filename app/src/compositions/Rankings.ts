@@ -49,7 +49,9 @@ function input(kind: "rank" | "result"): EndpointValidator {
 
 const Ranked = former(
   "the room's ranked results",
-  ({ room, category, metric, ascending, from, to }, { item, value, rank, resultCategory, measurements }) => where().form({
+  ({ room, category, metric, ascending, from, to }, { item, value, rank, resultCategory, measurements, total }) =>
+    where(PerformanceRanking._count({ scope: room, category, metric }).is({ total })).form({
+    total,
     results: each(PerformanceRanking._rank({ scope: room, category, metric, ascending, from, to })
       .is({ item, value, rank }))
       .where(PerformanceRanking._get({ item }).is({ scope: room, category: resultCategory, measurements }))

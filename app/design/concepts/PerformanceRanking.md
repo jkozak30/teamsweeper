@@ -71,6 +71,11 @@ _rank(scope: Scope, category?: Category, metric: Metric, ascending: Flag, from?:
   Provided bounds must be positive safe integers with to at least from.
   Invalid inputs refuse INVALID_RANKING.
 
+_count(scope: Scope, category?: Category, metric: Metric) : one (total: Number)
+  Returns the number of results matching scope, optional category, and metric,
+  using the same category matching as _rank, before any position range.
+  Returns total zero when no results match. Invalid inputs refuse INVALID_RANKING.
+
 _get(item: Item) : optional (scope: Scope, category: Category, measurements: Measurements)
   Returns the stored result, or no row for an unknown item.
 ```
