@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, provide, reactive, ref, watchEffect } from "vue";
+import BoardGrid from "./BoardGrid.vue";
+import { boardContext } from "./board-context.ts";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
-import { tint, type PlayerColors } from "../colors.ts";
+import { type PlayerColors } from "../colors.ts";
 
 type Snapshot = NonNullable<
   TeamsweeperWireHttp["/game/current"]["output"]["snapshot"]
@@ -34,7 +36,7 @@ const emit = defineEmits<{
 
 const dragging = ref(false);
 const pressed = ref<Coordinate | null>(null);
-const visited = ref(new Map<string, Coordinate>());
+const visited = reactive(new Map<string, Coordinate>());
 const key = (coord: Coordinate) =>
   `${coord.row},${coord.column}`;
 
@@ -73,13 +75,14 @@ function begin(cell: Cell, event: PointerEvent) {
   if (props.busy) return;
 
   dragging.value = true;
-  visited.value = new Map([[key(cell.coord), cell.coord]]);
+  visited.clear();
+  visited.set(key(cell.coord), cell.coord);
 }
 
 function enter(cell: Cell, event: PointerEvent) {
   if (pressed.value && (event.buttons & 1)) pressed.value = cell.coord;
   if (dragging.value && (event.buttons & 4)) {
-    visited.value.set(key(cell.coord), cell.coord);
+    visited.set(key(cell.coord), cell.coord);
   }
 }
 
@@ -91,14 +94,14 @@ function release() {
 function cancel() {
   release();
   dragging.value = false;
-  visited.value = new Map();
+  visited.clear();
 }
 
 function end(event: PointerEvent) {
   release();
   if (!dragging.value || event.button !== 1) return;
 
-  const coords = [...visited.value.values()];
+  const coords = [...visited.values()];
   cancel();
 
   if (props.busy) return;
@@ -122,136 +125,33 @@ onUnmounted(() => {
   window.removeEventListener("blur", cancel);
 });
 
-function cellTint(cell: Cell) {
-  const authors = cell.highlights.map(value => value.participant);
-
-  if (
-    visited.value.has(key(cell.coord)) &&
-    !authors.includes(props.participant)
-  ) {
-    authors.push(props.participant);
+const names = computed(() => new Map(props.players.map(player => [player.participant, player.name])));
+const pressedCells = reactive(new Set<number>());
+watchEffect(() => {
+  const next = new Set<number>();
+  const add = (coord: Coordinate) => {
+    const target = props.cells[coord.row * props.width + coord.column];
+    if (!target) return;
+    next.add(coord.row * props.width + coord.column);
+    if (!target.revealed || !target.adjacent) return;
+    const height = props.cells.length / props.width;
+    for (let row = Math.max(0, coord.row - 1); row <= Math.min(height - 1, coord.row + 1); row++) {
+      for (let column = Math.max(0, coord.column - 1); column <= Math.min(props.width - 1, coord.column + 1); column++) {
+        next.add(row * props.width + column);
+      }
+    }
+  };
+  for (const key of props.pendingCells) {
+    const [row, column] = key.split(",").map(Number);
+    add({ row: row!, column: column! });
   }
-
-  // Polar mixing depends on order; all clients use the same ordering.
-  const colors = authors.sort()
-    .map(author => props.colors[author])
-    .filter((color): color is string => !!color);
-
-  return tint(colors, 0.32);
-}
-
-function graphic(cell: Cell) {
-  if (cell.triggered) return "mine_red";
-  if (props.lost && cell.flagged && !cell.mine) return "mine_wrong";
-  if (cell.flagged) return "closed_flag";
-  if (cell.mine) return props.won ? "closed_flag" : "mine";
-  if (cell.revealed) return `type${cell.adjacent ?? 0}`;
-
-  if (props.pendingCells.some(value => {
-    if (value === key(cell.coord)) return true;
-    const target = props.cells.find(cell => key(cell.coord) === value);
-    return target?.revealed && !!target.adjacent &&
-      Math.abs(target.coord.row - cell.coord.row) <= 1 &&
-      Math.abs(target.coord.column - cell.coord.column) <= 1;
-  })) return "pressed";
-
-  const target = pressed.value && props.cells.find(value =>
-    key(value.coord) === key(pressed.value!)
-  );
-  if (target && (key(target.coord) === key(cell.coord) ||
-    (target.revealed && target.adjacent &&
-      Math.abs(target.coord.row - cell.coord.row) <= 1 &&
-      Math.abs(target.coord.column - cell.coord.column) <= 1))) return "pressed";
-  return "closed";
-}
-
-function label(cell: Cell) {
-  const content = cell.mine
-    ? (cell.triggered ? "triggered mine" : "mine")
-    : cell.flagged
-    ? "flagged"
-    : cell.revealed
-    ? `${cell.adjacent ?? 0} adjacent mines`
-    : "hidden";
-
-  const names = cell.highlights.map(value =>
-    props.players.find(
-      player => player.participant === value.participant,
-    )?.name ?? value.participant
-  );
-
-  return `Row ${cell.coord.row + 1}, column ${cell.coord.column + 1}: ${content}`
-    + (names.length ? `. Highlighted by ${names.join(", ")}` : "");
-}
+  if (pressed.value) add(pressed.value);
+  for (const id of pressedCells) if (!next.has(id)) pressedCells.delete(id);
+  for (const id of next) if (!pressedCells.has(id)) pressedCells.add(id);
+}, { flush: "sync" });
+provide(boardContext, { props, pressedCells, visited, names, click, flag, begin, enter, release });
 </script>
 
 <template>
-  <div
-    class="board"
-    @pointerleave="release"
-    :style="{ gridTemplateColumns: `repeat(${width}, 24px)` }"
-  >
-    <button
-      v-for="cell in cells"
-      :key="key(cell.coord)"
-      type="button"
-      :aria-disabled="busy"
-      :style="{ '--highlight': cellTint(cell) }"
-      :aria-label="label(cell)"
-      @click="click(cell, $event)"
-      @contextmenu.prevent="flag(cell)"
-      @pointerdown="begin(cell, $event)"
-      @pointerenter="enter(cell, $event)"
-      @mousedown="event => {
-        if (event.button === 1) event.preventDefault();
-      }"
-      @auxclick.prevent
-      @dragstart.prevent
-    >
-      <img :src="`/skins/hd/${graphic(cell)}.svg`" alt="" draggable="false" />
-    </button>
-  </div>
+  <BoardGrid :cells="cells" :width="width" />
 </template>
-
-<style scoped>
-.board {
-  display: grid;
-  width: max-content;
-  user-select: none;
-  grid-auto-rows: 24px;
-  border: 4px solid;
-  border-color: #808080 #fff #fff #808080;
-}
-
-button {
-  position: relative;
-  appearance: none;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: #c6c6c6;
-}
-
-button img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-button::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--highlight);
-  pointer-events: none;
-}
-
-button:focus-visible {
-  outline: 2px solid #1574b8;
-  outline-offset: -2px;
-  z-index: 1;
-}
-</style>

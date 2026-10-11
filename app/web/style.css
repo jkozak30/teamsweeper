@@ -487,7 +487,6 @@ main > section > ul > li {
 
 .copy-icon {
   display: block;
-  vertical-align: baseline;
   background-color: currentColor;
   mask: url("/icons/copy.svg") center / contain no-repeat;
 }

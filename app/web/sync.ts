@@ -1,3 +1,5 @@
+import { reactive } from "vue";
+import { setCell, highlightedCells, cellId } from "./cell-state.ts";
 import type { TeamsweeperWireHttp } from "../generated/wire.ts";
 
 type Game = TeamsweeperWireHttp["/game/current"]["output"];
@@ -12,16 +14,19 @@ export function applyBoard(current: Game | null, game: string, update: BoardUpda
   const previous = current?.game === game ? current.snapshot : null;
   if (!update.reset && !previous) throw new Error("RESET_REQUIRED");
   const total = update.settings.height * update.settings.width;
-  const cells: Cell[] = update.reset ? Array(total) : [...previous!.cells];
+  const cells: Cell[] = update.reset ? reactive(Array<Cell>(total)) : previous!.cells;
+  if (update.reset && update.cells.length !== total) throw new Error("RESET_REQUIRED");
+  if (update.cells.some(({ id }) => !Number.isSafeInteger(id) || id < 0 || id >= total)) {
+    throw new Error("RESET_REQUIRED");
+  }
   for (const { id, ...cell } of update.cells) {
-    if (!Number.isSafeInteger(id) || id < 0 || id >= total) throw new Error("RESET_REQUIRED");
-    cells[id] = {
+    setCell(cells, id, {
       ...cell,
       adjacent: cell.adjacent ?? null, mine: cell.mine ?? null, triggered: cell.triggered ?? null,
       highlights: previous?.cells[id]?.highlights ?? [],
-    };
+    });
   }
-  if (update.reset && update.cells.length !== total) throw new Error("RESET_REQUIRED");
+  if (update.reset) highlightedCells(cells, "");
   return {
     game,
     snapshot: {
@@ -36,16 +41,21 @@ export function applyAnnotations(
   state: Game, updates: AnnotationUpdate[], cache: AnnotationCache,
 ): Game {
   if (!state.snapshot || !state.game) return state;
-  const active = new Set(updates.map(update => update.participant));
-  for (const participant of cache.keys()) if (!active.has(participant)) cache.delete(participant);
+  const cells = state.snapshot.cells;
+  // Validate missing cursors before mutating either the cache or cells.
   for (const update of updates) {
-    if (update.targets !== null) cache.set(update.participant, update.targets);
-    else if (!cache.has(update.participant)) throw new Error("RESET_REQUIRED");
+    if (update.targets === null && !cache.has(update.participant)) throw new Error("RESET_REQUIRED");
   }
+  const active = new Set(updates.map(update => update.participant));
+  const changed = new Map<string, Set<number>>();
   const { width, height } = state.snapshot.settings;
-  const highlights = new Map<number, string[]>();
-  for (const [participant, targets] of cache) {
-    for (const target of targets) {
+  for (const participant of cache.keys()) {
+    if (!active.has(participant)) { changed.set(participant, new Set()); cache.delete(participant); }
+  }
+  for (const update of updates) {
+    if (update.targets === null) continue;
+    const ids = new Set<number>();
+    for (const target of update.targets) {
       if (typeof target !== "object" || target === null || target.game !== state.game) continue;
       const coord = target.coord;
       if (typeof coord !== "object" || coord === null || Array.isArray(coord)) continue;
@@ -53,17 +63,22 @@ export function applyAnnotations(
       if (typeof row !== "number" || typeof column !== "number" ||
           !Number.isInteger(row) || !Number.isInteger(column) ||
           row < 0 || column < 0 || row >= height || column >= width) continue;
-      const id = row * width + column;
-      const authors = highlights.get(id) ?? [];
-      authors.push(participant);
-      highlights.set(id, authors);
+      ids.add(cellId({ row, column }, width));
+    }
+    changed.set(update.participant, ids);
+    cache.set(update.participant, update.targets);
+  }
+  for (const [participant, ids] of changed) {
+    const affected = new Set([...highlightedCells(cells, participant), ...ids]);
+    for (const id of affected) {
+      const cell = cells[id]!;
+      const highlights = cell.highlights.filter(value => value.participant !== participant);
+      if (ids.has(id)) highlights.push({ participant });
+      highlights.sort((a, b) => a.participant.localeCompare(b.participant));
+      if (highlights.length === cell.highlights.length &&
+          highlights.every((value, i) => value.participant === cell.highlights[i]?.participant)) continue;
+      setCell(cells, id, { ...cell, highlights });
     }
   }
-  const cells = state.snapshot.cells.map((cell, id) => {
-    const authors = (highlights.get(id) ?? []).sort();
-    if (authors.length === cell.highlights.length &&
-        authors.every((author, index) => author === cell.highlights[index]?.participant)) return cell;
-    return { ...cell, highlights: authors.map(participant => ({ participant })) };
-  });
-  return { ...state, snapshot: { ...state.snapshot, cells } };
+  return state;
 }

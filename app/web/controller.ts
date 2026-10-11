@@ -1,3 +1,4 @@
+import { setCell, highlightedCells, optimisticEdit, cellId } from "./cell-state.ts";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { ClientCallOptions } from "@mit-sdg/sync-engine/client";
@@ -81,8 +82,7 @@ export function useTeamsweeperController() {
   ));
 
   const delayed = computed(() =>
-    !!lobby.value &&
-    (syncProblem.value || clock.value - lastSynced.value > 3000)
+    !!lobby.value && syncProblem.value
   );
 
   const key = (coord: Coordinate) =>
@@ -391,6 +391,15 @@ export function useTeamsweeperController() {
     };
   }
 
+  function clearParticipantHighlights(cells: Cell[]) {
+    const participant = lobby.value?.participant;
+    if (!participant) return;
+    for (const id of [...highlightedCells(cells, participant)]) {
+      const cell = cells[id]!;
+      setCell(cells, id, clearLocalHighlights(cell));
+    }
+  }
+
   async function run(
     mode: "room" | "board",
     operation: (options: ClientCallOptions) => Promise<void | boolean>,
@@ -416,7 +425,9 @@ export function useTeamsweeperController() {
     // Older reads cannot overwrite this action's local feedback.
     revision++;
     readController?.abort();
-    optimistic?.();
+    const undo = before?.snapshot && optimistic
+      ? optimisticEdit(before.snapshot.cells, optimistic)
+      : (optimistic?.(), () => {});
 
     const controller = new AbortController();
     actionController = controller;
@@ -430,6 +441,7 @@ export function useTeamsweeperController() {
     } catch (error) {
       if (!disposed) {
         if (lobby.value && gameState.value?.game === before?.game) {
+          undo();
           gameState.value = before;
         }
 
@@ -551,20 +563,14 @@ export function useTeamsweeperController() {
     }, () => updateSnapshot(snapshot => {
       let flagsRemaining = snapshot.flagsRemaining;
 
-      const cells = snapshot.cells.map(cell => {
-        const cleared = clearLocalHighlights(cell);
-
-        if (
-          kind !== "flag" ||
-          !canMove ||
-          key(cell.coord) !== key(coord)
-        ) {
-          return cleared;
-        }
-
+      const cells = snapshot.cells;
+      clearParticipantHighlights(cells);
+      if (kind === "flag" && canMove) {
+        const id = cellId(coord, snapshot.settings.width);
+        const cell = cells[id]!;
         flagsRemaining += Number(cell.flagged) - Number(value);
-        return { ...cleared, flagged: value };
-      });
+        setCell(cells, id, { ...cell, flagged: value });
+      }
 
       return {
         ...snapshot,
@@ -581,9 +587,8 @@ export function useTeamsweeperController() {
 
     if (!state?.game || !state.snapshot || !participant) return;
 
-    const cell = state.snapshot.cells.find(
-      cell => key(cell.coord) === key(coord),
-    );
+    const id = cellId(coord, state.snapshot.settings.width);
+    const cell = state.snapshot.cells[id];
     if (!cell) return;
 
     const game = state.game;
@@ -595,19 +600,14 @@ export function useTeamsweeperController() {
       check(removing
         ? await api.annotations.remove({ game, coord }, options)
         : await api.annotations.highlight({ game, coord }, options));
-    }, () => updateSnapshot(snapshot => ({
-      ...snapshot,
-      cells: snapshot.cells.map(cell =>
-        key(cell.coord) !== key(coord)
-          ? cell
-          : {
-            ...cell,
-            highlights: removing
-              ? clearLocalHighlights(cell).highlights
-              : [...cell.highlights, { participant }],
-          }
-      ),
-    })));
+    }, () => {
+      const cell = state.snapshot!.cells[id]!;
+      setCell(state.snapshot!.cells, id, {
+        ...cell,
+        highlights: removing ? clearLocalHighlights(cell).highlights
+          : [...cell.highlights, { participant }],
+      });
+    });
   }
 
   function performPaintHighlights(coords: Coordinate[]) {
@@ -617,20 +617,11 @@ export function useTeamsweeperController() {
     if (!state?.game || !state.snapshot || !participant) return;
 
     const game = state.game;
-    const existing = new Set(
-      state.snapshot.cells
-        .filter(cell =>
-          cell.highlights.some(
-            value => value.participant === participant,
-          )
-        )
-        .map(cell => key(cell.coord)),
-    );
-
-    const selected = new Map(coords.map(coord => [key(coord), coord]));
-    const additions = [...selected.values()].filter(
-      coord => !existing.has(key(coord)),
-    );
+    const cells = state.snapshot.cells;
+    const width = state.snapshot.settings.width;
+    const existing = highlightedCells(cells, participant);
+    const selected = new Map(coords.map(coord => [cellId(coord, width), coord]));
+    const additions = [...selected].filter(([id]) => !existing.has(id)).map(([, coord]) => coord);
 
     if (!additions.length) return;
 
@@ -638,17 +629,13 @@ export function useTeamsweeperController() {
       for (const coord of additions) {
         check(await api.annotations.highlight({ game, coord }, options));
       }
-    }, () => updateSnapshot(snapshot => ({
-      ...snapshot,
-      cells: snapshot.cells.map(cell =>
-        selected.has(key(cell.coord)) && !existing.has(key(cell.coord))
-          ? {
-            ...cell,
-            highlights: [...cell.highlights, { participant }],
-          }
-          : cell
-      ),
-    })));
+    }, () => {
+      for (const coord of additions) {
+        const id = cellId(coord, width);
+        const cell = cells[id]!;
+        setCell(cells, id, { ...cell, highlights: [...cell.highlights, { participant }] });
+      }
+    });
   }
 
   function performClearHighlights() {
@@ -657,10 +644,9 @@ export function useTeamsweeperController() {
 
     return run("board", async options => {
       check(await api.annotations.clear({ game }, options));
-    }, () => updateSnapshot(snapshot => ({
-      ...snapshot,
-      cells: snapshot.cells.map(clearLocalHighlights),
-    })));
+    }, () => {
+      if (gameState.value?.snapshot) clearParticipantHighlights(gameState.value.snapshot.cells);
+    });
   }
 
   async function copyCode() {
