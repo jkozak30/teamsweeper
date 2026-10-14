@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { checkInvariants } from "./state-checks.ts";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 import { policy } from "../src/http.ts";
@@ -8,6 +9,7 @@ let testDb: TestDb;
 let api: ReturnType<typeof createTestApp>["api"];
 let rooms: ReturnType<typeof createTestApp>["rooms"];
 let now: Date;
+let whenIdle: ReturnType<typeof createTestApp>["whenIdle"];
 
 const origin = policy.publicOrigin ?? "http://127.0.0.1:3000";
 const coord = { row: 0, column: 0 };
@@ -19,7 +21,11 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   now = new Date();
-  ({ api, rooms } = createTestApp(testDb.db, () => now));
+  ({ api, rooms, whenIdle } = createTestApp(testDb.db, () => now));
+});
+
+afterEach(async () => {
+  if (testDb) { await whenIdle(); await checkInvariants(testDb.db); }
 });
 
 afterAll(async () => {

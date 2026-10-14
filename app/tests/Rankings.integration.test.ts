@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { checkInvariants } from "./state-checks.ts";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
 import { withMinePlacement } from "./mine-picker.ts";
 import { PerformanceRankingConcept } from "../src/concepts/PerformanceRanking.ts";
@@ -13,12 +14,18 @@ const origin = policy.publicOrigin ?? "http://127.0.0.1:3000";
 const settings = { height: 3, width: 3, mines: 1 };
 
 beforeAll(async () => { testDb = await openTestDb(); }, 120_000);
+
 beforeEach(async () => {
   if (whenIdle) await whenIdle();
   await testDb.db.dropDatabase();
   ({ api, whenIdle } = createTestApp(testDb.db));
   ranking = new PerformanceRankingConcept(testDb.db);
 });
+
+afterEach(async () => {
+  if (testDb) { await whenIdle(); await checkInvariants(testDb.db); }
+});
+
 afterAll(async () => {
   if (whenIdle) await whenIdle();
   if (testDb) await testDb.close();

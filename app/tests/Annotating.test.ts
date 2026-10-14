@@ -1,9 +1,13 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { checkRefusal, checkInvariants } from "./state-checks.ts";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { AnnotatingConcept, AlreadyHighlighted, HighlightNotFound } from "../src/concepts/Annotating.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
 let testDb: TestDb;
 let annotating: AnnotatingConcept;
+
+const refusesWithoutChange = (operation: () => Promise<unknown>, expected: new (message?: string) => Error) =>
+  checkRefusal(testDb.db, ["annotating.annotations"], operation, expected);
 
 beforeAll(async () => {
   testDb = await openTestDb();
@@ -12,6 +16,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   annotating = new AnnotatingConcept(testDb.db);
+});
+
+afterEach(async () => {
+  if (testDb) await checkInvariants(testDb.db);
 });
 
 afterAll(async () => {
@@ -36,9 +44,7 @@ test("a user highlights, removes, and highlights an item again", async () => {
 test("duplicate highlights are refused without changing existing annotations", async () => {
   await annotating.highlight({ user: "alice", item: "cell-1" });
 
-  await expect(
-    annotating.highlight({ user: "alice", item: "cell-1" }),
-  ).rejects.toBeInstanceOf(AlreadyHighlighted);
+  await refusesWithoutChange(() => annotating.highlight({ user: "alice", item: "cell-1" }), AlreadyHighlighted);
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
@@ -66,15 +72,13 @@ test("missing and already-removed highlights are refused without removing anothe
     { user: "bob", item: "cell-1" },
     { user: "alice", item: "missing" },
   ]) {
-    await expect(annotating.remove(input)).rejects.toBeInstanceOf(HighlightNotFound);
+    await refusesWithoutChange(() => annotating.remove(input), HighlightNotFound);
   }
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
 
   await annotating.remove({ user: "alice", item: "cell-1" });
-  await expect(
-    annotating.remove({ user: "alice", item: "cell-1" }),
-  ).rejects.toBeInstanceOf(HighlightNotFound);
+  await refusesWithoutChange(() => annotating.remove({ user: "alice", item: "cell-1" }), HighlightNotFound);
 });
 
 test("clear removes all of one user's highlights and is safe to repeat", async () => {
@@ -169,9 +173,7 @@ test("compound items compare by value, including reordered object fields", async
   expect(await restored._forItem({ item: equivalent })).toEqual([{ author: "alice" }]);
   expect(await restored._byUser({ user: "alice" })).toEqual([{ target: item }]);
 
-  await expect(
-    restored.highlight({ user: "alice", item: equivalent }),
-  ).rejects.toBeInstanceOf(AlreadyHighlighted);
+  await refusesWithoutChange(() => restored.highlight({ user: "alice", item: equivalent }), AlreadyHighlighted);
 
   expect(
     await restored._forItem({ item: { ...item, game: "game-2" } }),
@@ -208,6 +210,8 @@ test("simultaneous equivalent compound items create only one annotation", async 
   }
 
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
+  expect(await annotating._forItem({ item: { game: "g", coord: { row: 0, column: 1 } } }))
+    .toEqual([{ author: "alice" }]);
 });
 
 test("sync cursors suppress unchanged targets and detect additions, removals, and clears", async () => {

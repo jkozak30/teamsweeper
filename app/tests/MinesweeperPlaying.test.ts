@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { checkRefusal, checkInvariants } from "./state-checks.ts";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import {
   MinesweeperPlayingConcept, InvalidSettings, GameNotFound, MoveNotAllowed,
   type Coordinate, type Settings, type Status,
@@ -27,6 +28,9 @@ const start = new Date("2026-10-07T12:00:00Z");
 const end = new Date("2026-10-07T12:00:10Z");
 const coord = (row: number, column: number): Coordinate => ({ row, column });
 
+const refusesWithoutChange = (operation: () => Promise<unknown>, expected: new (message?: string) => Error) =>
+  checkRefusal(testDb.db, ["minesweeperPlaying.games"], operation, expected);
+
 beforeAll(async () => {
   testDb = await openTestDb();
 }, 120_000);
@@ -34,6 +38,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   playing = new MinesweeperPlayingConcept(testDb.db);
+});
+
+afterEach(async () => {
+  if (testDb) await checkInvariants(testDb.db);
 });
 
 afterAll(async () => {
@@ -103,7 +111,7 @@ test("create stores an idle board and refuses invalid settings", async () => {
     { height: NaN, width: 3, mines: 1 },
     { height: 3, width: Infinity, mines: 1 },
   ]) {
-    await expect(playing.create({ settings })).rejects.toBeInstanceOf(InvalidSettings);
+    await refusesWithoutChange(() => playing.create({ settings }), InvalidSettings);
   }
 
   expect(await testDb.db.collection("minesweeperPlaying.games").countDocuments()).toBe(0);
@@ -229,17 +237,11 @@ test("matching flag count with an incorrect flag makes chording lose", async () 
 });
 
 test("moves refuse missing games and queries return no rows", async () => {
-  await expect(
-    playing.reveal({ game: "missing", coord: coord(0, 0), now: end }),
-  ).rejects.toBeInstanceOf(GameNotFound);
+  await refusesWithoutChange(() => playing.reveal({ game: "missing", coord: coord(0, 0), now: end }), GameNotFound);
 
-  await expect(
-    playing.flag({ game: "missing", coord: coord(0, 0), value: true }),
-  ).rejects.toBeInstanceOf(GameNotFound);
+  await refusesWithoutChange(() => playing.flag({ game: "missing", coord: coord(0, 0), value: true }), GameNotFound);
 
-  await expect(
-    playing.chord({ game: "missing", coord: coord(0, 0), now: end }),
-  ).rejects.toBeInstanceOf(GameNotFound);
+  await refusesWithoutChange(() => playing.chord({ game: "missing", coord: coord(0, 0), now: end }), GameNotFound);
 
   expect(await playing._getGame({ game: "missing" })).toEqual([]);
   expect(await playing._visibleCells({ game: "missing" })).toEqual([]);
@@ -251,40 +253,24 @@ test("invalid coordinates and refused moves leave the board unchanged", async ()
   const initial = await board(game);
 
   for (const invalid of [coord(-1, 0), coord(3, 0), coord(0, 3), coord(0, 0.5)]) {
-    await expect(
-      playing.reveal({ game, coord: invalid, now: end }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.reveal({ game, coord: invalid, now: end }), MoveNotAllowed);
 
-    await expect(
-      playing.flag({ game, coord: invalid, value: true }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.flag({ game, coord: invalid, value: true }), MoveNotAllowed);
 
-    await expect(
-      playing.chord({ game, coord: invalid, now: end }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.chord({ game, coord: invalid, now: end }), MoveNotAllowed);
   }
 
   for (const cell of [coord(1, 1), coord(0, 1)]) {
-    await expect(
-      playing.reveal({ game, coord: cell, now: end }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.reveal({ game, coord: cell, now: end }), MoveNotAllowed);
   }
 
-  await expect(
-    playing.flag({ game, coord: coord(1, 1), value: true }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.flag({ game, coord: coord(1, 1), value: true }), MoveNotAllowed);
 
-  await expect(
-    playing.flag({ game, coord: coord(0, 1), value: true }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.flag({ game, coord: coord(0, 1), value: true }), MoveNotAllowed);
 
-  await expect(
-    playing.flag({ game, coord: coord(2, 2), value: false }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.flag({ game, coord: coord(2, 2), value: false }), MoveNotAllowed);
 
-  await expect(
-    playing.chord({ game, coord: coord(2, 2), now: end }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.chord({ game, coord: coord(2, 2), now: end }), MoveNotAllowed);
 
   expect(await board(game)).toEqual(initial);
 });
@@ -294,21 +280,15 @@ test("chording refuses idle games, mismatched flags, and empty targets", async (
     settings: { height: 3, width: 3, mines: 1 },
   });
 
-  await expect(
-    playing.chord({ game: idle.game, coord: coord(0, 0), now: end }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.chord({ game: idle.game, coord: coord(0, 0), now: end }), MoveNotAllowed);
 
   const mismatch = await fixture(3, 3, [0], [4]);
 
-  await expect(
-    playing.chord({ game: mismatch, coord: coord(1, 1), now: end }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.chord({ game: mismatch, coord: coord(1, 1), now: end }), MoveNotAllowed);
 
   const empty = await fixture(3, 3, [1, 8], [0, 3, 4], [1]);
 
-  await expect(
-    playing.chord({ game: empty, coord: coord(0, 0), now: end }),
-  ).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.chord({ game: empty, coord: coord(0, 0), now: end }), MoveNotAllowed);
 });
 
 test("won and lost games refuse further moves", async () => {
@@ -318,17 +298,11 @@ test("won and lost games refuse further moves", async () => {
     await playing.reveal({ game, coord: target, now: end });
     const finished = await board(game);
 
-    await expect(
-      playing.reveal({ game, coord: coord(0, 1), now: end }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.reveal({ game, coord: coord(0, 1), now: end }), MoveNotAllowed);
 
-    await expect(
-      playing.flag({ game, coord: coord(0, 1), value: true }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.flag({ game, coord: coord(0, 1), value: true }), MoveNotAllowed);
 
-    await expect(
-      playing.chord({ game, coord: coord(0, 1), now: end }),
-    ).rejects.toBeInstanceOf(MoveNotAllowed);
+    await refusesWithoutChange(() => playing.chord({ game, coord: coord(0, 1), now: end }), MoveNotAllowed);
 
     expect(await board(game)).toEqual(finished);
   }
@@ -445,14 +419,11 @@ test("simultaneous moves across instances never overwrite a successful move", as
   }
 });
 
-test("legacy games reset safely and refused moves do not advance revisions", async () => {
+test("new games reset safely and refused moves do not advance revisions", async () => {
   const { game } = await playing.create({ settings: { height: 3, width: 3, mines: 1 } });
-  await testDb.db.collection("minesweeperPlaying.games").updateOne(
-    { _id: game } as never, { $unset: { cellRevisions: "" } },
-  );
-  expect((await playing._updates({ game, since: 0 }))[0]!.update.reset).toBe(true);
+  expect((await playing._updates({ game, since: -1 }))[0]!.update.reset).toBe(true);
   await playing.flag({ game, coord: coord(0, 0), value: true });
-  await expect(playing.flag({ game, coord: coord(0, 0), value: true })).rejects.toBeInstanceOf(MoveNotAllowed);
+  await refusesWithoutChange(() => playing.flag({ game, coord: coord(0, 0), value: true }), MoveNotAllowed);
   const update = (await playing._updates({ game, since: 1 }))[0]!.update;
   expect(update.revision).toBe(1);
   expect(update.reset).toBe(false);
@@ -562,6 +533,6 @@ test("board limits refuse oversized dimensions and invalid mine counts", async (
     { height: 100, width: 1.5, mines: 1 },
     { height: 1, width: 1, mines: 1 },
   ]) {
-    await expect(playing.create({ settings })).rejects.toBeInstanceOf(InvalidSettings);
+    await refusesWithoutChange(() => playing.create({ settings }), InvalidSettings);
   }
 });

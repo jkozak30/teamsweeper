@@ -1,5 +1,6 @@
+import { checkInvariants } from "./state-checks.ts";
 import { cleanupSessions } from "../src/session-cleanup.ts";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createTestApp } from "./test-app.ts";
 import { policy } from "../src/http.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
@@ -21,6 +22,10 @@ beforeEach(async () => {
   await testDb.db.dropDatabase();
   now = new Date();
   ({ api, rooms, concepts, whenIdle } = createTestApp(testDb.db, () => now));
+});
+
+afterEach(async () => {
+  if (testDb) { await whenIdle(); await checkInvariants(testDb.db); }
 });
 
 afterAll(async () => {
@@ -378,18 +383,23 @@ test("cleanup removes expired members and annotations, transfers host, and close
   const alice = await post("create", { name: "Alice" });
   const bob = await post("join", { name: "Bob", code: alice.data.code });
   const participant = stringField(alice.data, "participant");
-  await testDb.db.collection<{ _id: string; author: string; target: string }>("annotating.annotations").insertOne({
-    _id: "expired-highlight", author: participant, target: "cell",
-  });
+  const item = { game: "cleanup-fixture", coord: { row: 0, column: 0 } };
+  expect(await concepts.Annotating.highlight({ user: participant, item })).toEqual({});
   now = new Date(now.getTime() + 60_000);
-  await post("renew", {}, sessionCookie(bob.response));
+  // Call Sessioning directly: a Rooms renewal would remove the absent host early.
+  const renewed = await concepts.Sessioning.renew({
+    session: sessionCookie(bob.response).split("=")[1]!,
+  });
+  expect("error" in renewed).toBe(false);
+  expect((await rooms._getParticipant({ participant }))[0]!.active).toBe(true);
+  expect(await concepts.Annotating._byUser({ user: participant })).toEqual([{ target: item }]);
   now = new Date(now.getTime() + 540_000);
   await cleanupSessions(concepts);
   await whenIdle();
   expect((await rooms._getParticipant({ participant }))[0]!.active).toBe(false);
   const room = (await rooms._getRoom({ room: stringField(alice.data, "room") }))[0]!;
   expect(room.host).toBe(stringField(bob.data, "participant"));
-  expect(await testDb.db.collection("annotating.annotations").findOne({ author: participant })).toBeNull();
+  expect(await concepts.Annotating._byUser({ user: participant })).toEqual([]);
   now = new Date(now.getTime() + 60_000);
   await cleanupSessions(concepts);
   expect((await rooms._getRoom({ room: stringField(alice.data, "room") }))[0]!.status).toBe("CLOSED");

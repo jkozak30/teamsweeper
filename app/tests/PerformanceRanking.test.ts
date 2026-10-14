@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { checkRefusal, checkInvariants } from "./state-checks.ts";
+import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import {
   PerformanceRankingConcept, InvalidResult, ResultAlreadyRecorded, InvalidRanking,
 } from "../src/concepts/PerformanceRanking.ts";
@@ -7,6 +8,9 @@ import { openTestDb, type TestDb } from "./test-db.ts";
 let testDb: TestDb;
 let ranking: PerformanceRankingConcept;
 
+const refusesWithoutChange = (operation: () => Promise<unknown>, expected: new (message?: string) => Error) =>
+  checkRefusal(testDb.db, ["performanceRanking.results"], operation, expected);
+
 beforeAll(async () => {
   testDb = await openTestDb();
 }, 120_000);
@@ -14,6 +18,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   await testDb.db.dropDatabase();
   ranking = new PerformanceRankingConcept(testDb.db);
+});
+
+afterEach(async () => {
+  if (testDb) await checkInvariants(testDb.db);
 });
 
 afterAll(async () => {
@@ -58,7 +66,7 @@ test("an item cannot be recorded twice, even with identical measurements", async
     result, { ...result, scope: "room-2" },
     { ...result, measurements: [{ metric: "Time", value: 1 }] },
   ]) {
-    await expect(ranking.record(repeated)).rejects.toBeInstanceOf(ResultAlreadyRecorded);
+    await refusesWithoutChange(() => ranking.record(repeated), ResultAlreadyRecorded);
   }
   expect(await ranking._get({ item: result.item })).toEqual([{
     scope: result.scope, category, measurements: result.measurements,
@@ -159,7 +167,7 @@ test("invalid measurements and duplicate metrics refuse without storing results"
     [{ metric: "Time", value: 1 }, { metric: "Time", value: 1 }],
     [{ metric: "Time", value: 1 }, { metric: "Time", value: 2 }],
   ]) {
-    await expect(ranking.record({ ...result, measurements } as never)).rejects.toBeInstanceOf(InvalidResult);
+    await refusesWithoutChange(() => ranking.record({ ...result, measurements } as never), InvalidResult);
   }
   expect(await testDb.db.collection("performanceRanking.results").countDocuments()).toBe(0);
 });
@@ -169,7 +177,7 @@ test("invalid identities or non-JSON categories refuse without storing results",
     { item: "" }, { scope: "" }, { category: "" }, { category: null },
     { category: [] }, { category: { size: undefined } }, { category: { size: Infinity } },
   ]) {
-    await expect(ranking.record({ ...result, ...changed } as never)).rejects.toBeInstanceOf(InvalidResult);
+    await refusesWithoutChange(() => ranking.record({ ...result, ...changed } as never), InvalidResult);
   }
   expect(await testDb.db.collection("performanceRanking.results").countDocuments()).toBe(0);
 });
@@ -183,7 +191,7 @@ test("invalid ranking filters and index ranges refuse without changing recorded 
     { from: 0 }, { from: -1 }, { from: 1.5 }, { from: NaN },
     { to: 0 }, { to: 1.5 }, { from: 3, to: 2 }, { to: Infinity },
   ]) {
-    await expect(ranking._rank({ ...input, ...changed } as never)).rejects.toBeInstanceOf(InvalidRanking);
+    await refusesWithoutChange(() => ranking._rank({ ...input, ...changed } as never), InvalidRanking);
   }
   expect(await ranking._get({ item: result.item })).toEqual([{
     scope: result.scope, category, measurements: result.measurements,
@@ -212,5 +220,5 @@ test("counts match filtered rankings before paging, including empty and missing-
     expect(await ranking._count(input)).toEqual({ total: (await rank(input)).length });
   }
   expect(await ranking._count({ scope: "room-1", metric: "Time" })).toEqual({ total: 2 });
-  await expect(ranking._count({ scope: "", metric: "Time" })).rejects.toBeInstanceOf(InvalidRanking);
+  await refusesWithoutChange(() => ranking._count({ scope: "", metric: "Time" }), InvalidRanking);
 });
