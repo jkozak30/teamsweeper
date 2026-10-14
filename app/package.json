@@ -4,7 +4,7 @@
   },
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.4",
+  "packageManager": "bun@1.4.2",
   "dependencies": {
     "@mit-sdg/sync-engine": "1.1.0",
     "@mit-sdg/sync-engine-http": "1.1.0",
@@ -31,6 +31,8 @@
     "db:shell": "podman compose exec mongo mongosh -u dev -p dev",
     "db:logs": "podman compose logs mongo",
     "db:reset": "podman compose down -v",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "vite build",
+    "preview": "bun run db:up && bun run build && NODE_ENV=production PORT=3000 PUBLIC_ORIGIN=http://127.0.0.1:3000 bun run start"
   }
 }
