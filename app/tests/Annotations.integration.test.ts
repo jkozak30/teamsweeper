@@ -80,7 +80,7 @@ async function start(host: { room: string; cookie: string }) {
 async function edit(action: string, game: string, cookie?: string, target = coord) {
   return post(`annotations/${action}`, {
     game,
-    ...(action === "clear" ? {} : { coord: target }),
+    ...(action === "clear" ? {} : action === "highlight" ? { coords: [target] } : { coord: target }),
   }, cookie);
 }
 
@@ -142,12 +142,12 @@ test("members share independent highlights without changing or exposing the boar
   expect(authors((await current(bob.cookie)).snapshot.cells[0])).toEqual([bob.participant]);
 });
 
-test("duplicate highlights and absent removals refuse without changing annotations", async () => {
+test("duplicate highlights are idempotent and absent removals refuse", async () => {
   const alice = await enter("Alice");
   const game = await start(alice);
 
   expect((await edit("highlight", game, alice.cookie)).response.status).toBe(200);
-  await refuses("highlight", game, alice.cookie, 409, "CONFLICT");
+  expect((await edit("highlight", game, alice.cookie)).response.status).toBe(200);
   expect(await annotations().countDocuments()).toBe(1);
 
   expect((await edit("remove", game, alice.cookie)).response.status).toBe(200);
@@ -315,4 +315,64 @@ test("closing the room through the last departure prevents annotation with a val
   }
 
   expect(await annotations().countDocuments()).toBe(0);
+});
+
+test("one highlight request adds the whole selection and preserves other authors and board state", async () => {
+  const alice = await enter("Alice");
+  const bob = await enter("Bob", alice.code);
+  const game = await start(alice);
+  await edit("highlight", game, bob.cookie);
+  const before = await testDb.db.collection<{ _id: string }>("minesweeperPlaying.games").findOne({ _id: game });
+  const coords = [{ row: 0, column: 0 }, { row: 1, column: 2 }, { row: 0, column: 0 }];
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const highlighted = await post("annotations/highlight", { game, coords }, alice.cookie);
+    expect(highlighted.response.status).toBe(200);
+  }
+  expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(3);
+  expect(await testDb.db.collection<{ _id: string }>("minesweeperPlaying.games").findOne({ _id: game })).toEqual(before);
+  const state = await current(bob.cookie);
+  expect(state.snapshot.cells[0].highlights.map((value: { participant: string }) => value.participant).sort())
+    .toEqual([alice.participant, bob.participant].sort());
+  expect(state.snapshot.cells[5].highlights).toEqual([{ participant: alice.participant }]);
+});
+
+test("highlight validates every coordinate and refuses foreign or replaced games without writes", async () => {
+  const alice = await enter("Alice");
+  const outsider = await enter("Outsider");
+  const game = await start(alice);
+  await edit("highlight", game, alice.cookie);
+  const before = await testDb.db.collection("annotating.annotations").find({}).toArray();
+  const valid = { row: 1, column: 1 };
+  for (const invalid of [{ row: 3, column: 0 }, { row: -1, column: 0 }, { row: 0.5, column: 0 }]) {
+    const result = await post("annotations/highlight", { game, coords: [valid, invalid] }, alice.cookie);
+    expect(result.response.status).toBe(400);
+  }
+  for (const cookie of [undefined, "teamsweeper-session=invented", outsider.cookie]) {
+    const result = await post("annotations/highlight", { game, coords: [valid] }, cookie);
+    expect(result.response.status).not.toBe(200);
+  }
+  for (const coords of [[], Array(10001).fill(valid)]) {
+    expect((await post("annotations/highlight", { game, coords }, alice.cookie)).response.status).toBe(400);
+  }
+  const forged = await post("annotations/highlight", { game, coords: [valid], participant: outsider.participant }, alice.cookie);
+  expect(forged.response.status).toBe(400);
+  await start(alice);
+  expect((await post("annotations/highlight", { game, coords: [valid] }, alice.cookie)).response.status).toBe(409);
+  expect(await testDb.db.collection("annotating.annotations").find({}).toArray()).toEqual(before);
+});
+
+test("moves clear only their author's highlights in the same request; refused moves preserve them", async () => {
+  const alice = await enter("Alice");
+  const bob = await enter("Bob", alice.code);
+  const game = await start(alice);
+  const target = { row: 1, column: 1 };
+  for (const player of [alice, bob]) await edit("highlight", game, player.cookie, target);
+  const moved = await post("game/flag", { game, coord, value: true }, alice.cookie);
+  expect(moved.response.status).toBe(200);
+  expect(await testDb.db.collection("annotating.annotations").countDocuments({ author: alice.participant })).toBe(0);
+  expect(await testDb.db.collection("annotating.annotations").countDocuments({ author: bob.participant })).toBe(1);
+  await edit("highlight", game, alice.cookie, target);
+  const refused = await post("game/flag", { game, coord, value: true }, alice.cookie);
+  expect(refused.response.status).toBe(409);
+  expect(await testDb.db.collection("annotating.annotations").countDocuments({ author: alice.participant })).toBe(1);
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MAX_BOARD_DIMENSION } from "../../src/board-limits.ts";
+import { MAX_BOARD_DIMENSION } from "../../src/limits.ts";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 
 type Settings = TeamsweeperWireHttp["/game/start"]["input"]["settings"];

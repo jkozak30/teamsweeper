@@ -1,8 +1,10 @@
+import { MAX_NAME_LENGTH } from "../src/limits.ts";
 import type { Db } from "mongodb";
 import { checkRefusal, checkInvariants, storedState } from "./state-checks.ts";
 import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import {
   RoomJoiningConcept, CreateNameRequired, JoinNameRequired, RoomUnavailable,
+  CreateNameTooLong, JoinNameTooLong,
   ParticipantNotActive, RoomNotOpen, GameAlreadyAssociated, HostRequired,
 } from "../src/concepts/RoomJoining.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
@@ -324,4 +326,25 @@ test("failed participant insertion during creation removes the provisional room"
   await expect(failing.create({ name: "Alice" })).rejects.toBeInstanceOf(Error);
   expect(injected).toBe(true);
   expect(await storedState(testDb.db, collections)).toEqual(before);
+});
+
+
+test("names are trimmed and the exact length boundary is accepted", async () => {
+  const name = "n".repeat(MAX_NAME_LENGTH);
+  const host = await rooms.create({ name: `  ${name}  ` });
+  const guest = await rooms.join({ code: host.code, name: ` ${name} ` });
+  expect((await rooms._getParticipant({ participant: host.participant }))[0]!.name).toBe(name);
+  expect((await rooms._getParticipant({ participant: guest.participant }))[0]!.name).toBe(name);
+});
+
+test("blank and oversized names refuse before creating membership", async () => {
+  const host = await rooms.create({ name: "Alice" });
+  for (const name of [" ", "\t\n"]) {
+    await refusesWithoutChange(() => rooms.create({ name }), CreateNameRequired);
+    await refusesWithoutChange(() => rooms.join({ code: host.code, name }), JoinNameRequired);
+  }
+  for (const name of ["n".repeat(MAX_NAME_LENGTH + 1), "😀".repeat(17)]) {
+    await refusesWithoutChange(() => rooms.create({ name }), CreateNameTooLong);
+    await refusesWithoutChange(() => rooms.join({ code: host.code, name }), JoinNameTooLong);
+  }
 });

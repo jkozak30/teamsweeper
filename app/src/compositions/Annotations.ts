@@ -1,3 +1,4 @@
+import { MAX_BOARD_DIMENSION } from "../limits.ts";
 import { endpoint, receive, respond, type EndpointValidator } from "@mit-sdg/sync-engine/boundary";
 import { compute, each, former, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts, computations } from "../concepts.ts";
@@ -13,24 +14,24 @@ function input(kind: "highlight" | "remove" | "clear"): EndpointValidator {
     }
 
     const body = value as Record<string, unknown>;
-    const keys = kind === "clear" ? ["session", "game"] : ["session", "game", "coord"];
-    const coord = body.coord as Record<string, unknown> | null;
+    const keys = kind === "clear" ? ["session", "game"]
+      : kind === "highlight" ? ["session", "game", "coords"] : ["session", "game", "coord"];
+    const coordinate = (coord: unknown): boolean =>
+      typeof coord === "object" && coord !== null && !Array.isArray(coord) &&
+      Object.keys(coord).length === 2 &&
+      Object.hasOwn(coord, "row") && Object.hasOwn(coord, "column") &&
+      Number.isSafeInteger((coord as Record<string, unknown>).row) &&
+      Number.isSafeInteger((coord as Record<string, unknown>).column);
 
     const valid =
       Object.keys(body).length === keys.length &&
       keys.every(key => Object.hasOwn(body, key)) &&
       (body.session === null || typeof body.session === "string") &&
       typeof body.game === "string" &&
-      (kind === "clear" || (
-        typeof coord === "object" &&
-        coord !== null &&
-        !Array.isArray(coord) &&
-        Object.keys(coord).length === 2 &&
-        typeof coord.row === "number" &&
-        Number.isFinite(coord.row) &&
-        typeof coord.column === "number" &&
-        Number.isFinite(coord.column)
-      ));
+      (kind === "clear" || (kind === "highlight"
+        ? Array.isArray(body.coords) && body.coords.length > 0 &&
+          body.coords.length <= MAX_BOARD_DIMENSION ** 2 && body.coords.every(coordinate)
+        : coordinate(body.coord)));
 
     return valid
       ? { ok: true }
@@ -68,27 +69,37 @@ export const CellHighlights = former(
 function edit(kind: "highlight" | "remove" | "clear") {
   return endpoint(
     `/annotations/${kind}`,
-    ({ session, game, coord, participant, item }) => {
-      const fields = kind === "clear" ? { session, game } : { session, game, coord };
+    ({ session, game, coord, coords, participant, item, items, settings }) => {
+      const fields = kind === "clear" ? { session, game }
+        : kind === "highlight" ? { session, game, coords } : { session, game, coord };
 
       const action = kind === "highlight"
-        ? Annotating.highlight({ user: participant, item })
+        ? Annotating.highlight({ user: participant, items })
         : kind === "remove"
         ? Annotating.remove({ user: participant, item })
         : Annotating.clear({ user: participant });
 
       const allowed = kind === "clear"
         ? where(MayAnnotate({ participant, game }))
+        : kind === "highlight"
+        ? where(
+          MayAnnotate({ participant, game }),
+          MinesweeperPlaying._getGame({ game }).is({ settings }),
+          compute(computations.validateGameCells, { game, coords, settings }, { valid: true, items }),
+        )
         : where(
           MayAnnotate({ participant, game }),
           Cell({ game, coord }).is({ item }),
         );
 
       const invalidCell = kind === "clear" ? [] : [
-        where(
-          MayAnnotate({ participant, game }),
-          no(Cell({ game, coord })),
-        )
+        (kind === "highlight"
+          ? where(
+            MayAnnotate({ participant, game }),
+            MinesweeperPlaying._getGame({ game }).is({ settings }),
+            compute(computations.validateGameCells, { game, coords, settings }, { valid: false }),
+          )
+          : where(MayAnnotate({ participant, game }), no(Cell({ game, coord }))))
           .then(respond({ error: "INVALID_COORDINATE" }))
           .named("invalid-cell"),
       ];
@@ -128,7 +139,7 @@ function edit(kind: "highlight" | "remove" | "clear") {
       input: {
         required: kind === "clear"
           ? ["session", "game"]
-          : ["session", "game", "coord"],
+          : kind === "highlight" ? ["session", "game", "coords"] : ["session", "game", "coord"],
       },
       validators: { input: input(kind) },
     },

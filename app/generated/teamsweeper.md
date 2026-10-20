@@ -14,8 +14,7 @@ Defined in [Annotating](../design/concepts/Annotating.md), line 1.
 
 #### Actions
 
-- `highlight(user: User, item: Item) : returns ()`
-  - Refuses `ALREADY_HIGHLIGHTED`: You have already highlighted that item.
+- `highlight(user: User, items: Items) : returns ()`
 - `remove(user: User, item: Item) : returns ()`
   - Refuses `HIGHLIGHT_NOT_FOUND`: You have not highlighted that item.
 - `clear(user: User) : returns ()`
@@ -92,8 +91,10 @@ Defined in [RoomJoining](../design/concepts/RoomJoining.md), line 1.
 #### Actions
 
 - `create(name: String) : returns (room: Room, participant: Participant, code: String)`
+  - Refuses `CREATE_NAME_TOO_LONG`: Use a display name of at most 32 characters.
   - Refuses `CREATE_NAME_REQUIRED`: Enter a display name to create a room.
 - `join(code: String, name: String) : returns (participant: Participant)`
+  - Refuses `JOIN_NAME_TOO_LONG`: Use a display name of at most 32 characters.
   - Refuses `JOIN_NAME_REQUIRED`: Enter a display name to join a room.
   - Refuses `ROOM_UNAVAILABLE`: No open room has that code.
 - `leave(participant: Participant) : returns ()`
@@ -155,13 +156,14 @@ Concrete types:
 
 ## Computations
 
-- `annotationCursor(cursors: Annotating.Cursors, author: RoomJoining.Participant) : String` — [Game](../design/compositions/Game.md), line 67.
-- `boardCursors(knownGame: String, game: MinesweeperPlaying.Game, cursors: Annotating.Cursors) : Annotating.Cursors` — [Game](../design/compositions/Game.md), line 64.
-- `boardSince(knownGame: String, game: MinesweeperPlaying.Game, since: Number) : Number` — [Game](../design/compositions/Game.md), line 61.
-- `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coord) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 30.
+- `annotationCursor(cursors: Annotating.Cursors, author: RoomJoining.Participant) : String` — [Game](../design/compositions/Game.md), line 70.
+- `boardCursors(knownGame: String, game: MinesweeperPlaying.Game, cursors: Annotating.Cursors) : Annotating.Cursors` — [Game](../design/compositions/Game.md), line 67.
+- `boardSince(knownGame: String, game: MinesweeperPlaying.Game, since: Number) : Number` — [Game](../design/compositions/Game.md), line 64.
+- `gameCell(game: MinesweeperPlaying.Game, coord: MinesweeperPlaying.Coordinate) : GameCell` — [Annotations](../design/compositions/Annotations.md), line 35.
 - `rankingCategory(category: GameCategory | String | null) : GameCategory | String | undefined` — [Rankings](../design/compositions/Rankings.md), line 31.
 - `resultCategory(settings: MinesweeperPlaying.Settings, status: MinesweeperPlaying.Status) : PerformanceRanking.Category` — [Rankings](../design/compositions/Rankings.md), line 34.
 - `resultMeasurements(time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number) : PerformanceRanking.Measurements` — [Rankings](../design/compositions/Rankings.md), line 37.
+- `validateGameCells(game: MinesweeperPlaying.Game, coords: Array<MinesweeperPlaying.Coordinate>, settings: MinesweeperPlaying.Settings) : { valid: Flag, items: Annotating.Items }` — [Annotations](../design/compositions/Annotations.md), line 38.
 
 ## Views
 
@@ -182,7 +184,7 @@ the active lobby of (participant) — inputs (participant); outputs (room, code,
 ### the cell identity in (game) at (coord)
 
 Authored path: `Annotations.Cell`.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 8.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
 
 ```view
 the cell identity in (game) at (coord) — inputs (game, coord); outputs (item); bindings () — answers at most one (item)
@@ -259,7 +261,7 @@ Former "the active room participants" — inputs (room); bindings (participant, 
 ### the cell highlighters
 
 Authored path: `Annotations.CellHighlights`.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 23.
 
 ```former
 Former "the cell highlighters" — inputs (room, game, coord); bindings (item, author); promises exactly one record — forms:
@@ -274,7 +276,7 @@ Former "the cell highlighters" — inputs (room, game, coord); bindings (item, a
 ### the committed board changes
 
 Authored path: `Game.BoardChanges`.
-- Covered by [Game](../design/compositions/Game.md), line 51.
+- Covered by [Game](../design/compositions/Game.md), line 54.
 
 ```former
 Former "the committed board changes" — inputs (game, since); bindings (update); promises exactly one record — forms:
@@ -286,7 +288,7 @@ Former "the committed board changes" — inputs (game, since); bindings (update)
 ### the incremental game state
 
 Authored path: `Game.Changes`.
-- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 41.
 
 ```former
 Former "the incremental game state" — inputs (room, game, since, cursors); bindings (update, author, cursor, nextCursor, targets); promises exactly one record — forms:
@@ -325,7 +327,7 @@ Former "the room's ranked results" — inputs (room, category, metric, ascending
 ### the visible game state
 
 Authored path: `Game.Snapshot`.
-- Covered by [Game](../design/compositions/Game.md), line 27.
+- Covered by [Game](../design/compositions/Game.md), line 30.
 
 ```former
 Former "the visible game state" — inputs (room, game); bindings (settings, status, clicks, flagsRemaining, startedAt, endedAt, coord, revealed, flagged, adjacent, mine, triggered, time, bv, resultClicks, speed, efficiency); promises exactly one record — forms:
@@ -365,7 +367,7 @@ Former "the visible game state" — inputs (room, game); bindings (settings, sta
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when RequestBoundary.request (game, path: "/annotations/clear", requestId, session)
@@ -377,7 +379,7 @@ then
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Clear
@@ -392,7 +394,7 @@ then
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Clear
@@ -407,7 +409,7 @@ then
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when Annotating.clear (user: participant), asked by Annotations.Clear:member-edits#2
@@ -421,7 +423,7 @@ then
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Clear
@@ -437,7 +439,7 @@ then
 
 Authored path: `Annotations.Clear`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 15.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 20.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Clear
@@ -452,7 +454,7 @@ then
 ### Annotations.ClearOnLeave
 
 Authored path: `Annotations.ClearOnLeave`.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 26.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 31.
 - Covered by [Rooms](../design/compositions/Rooms.md), line 32.
 
 ```reaction
@@ -465,10 +467,10 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
-when RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+when RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
 then
   Sessioning.current (session)
 ```
@@ -477,13 +479,13 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
 where
   no RoomJoining._getParticipant (participant) has (active: true)
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
 then
   RequestBoundary.respond (error: "PARTICIPANT_NOT_ACTIVE", requestId)
 ```
@@ -492,14 +494,15 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
 where
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
   view "whether (participant) may annotate (game)" with (game, participant)
-  no view "the cell identity in (game) at (coord)" with (coord, game)
+  MinesweeperPlaying._getGame (game) has (settings)
+  (valid: false) is validateGameCells (coords, game, settings)
 then
   RequestBoundary.respond (error: "INVALID_COORDINATE", requestId)
 ```
@@ -508,28 +511,29 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
 where
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
   view "whether (participant) may annotate (game)" with (game, participant)
-  view "the cell identity in (game) at (coord)" with (coord, game) has (item)
+  MinesweeperPlaying._getGame (game) has (settings)
+  (items, valid: true) is validateGameCells (coords, game, settings)
 then
-  Annotating.highlight (item, user: participant)
+  Annotating.highlight (items, user: participant)
 ```
 
 ### Annotations.Highlight:member-edits#3
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
-when Annotating.highlight (item, user: participant), asked by Annotations.Highlight:member-edits#2
+when Annotating.highlight (items, user: participant), asked by Annotations.Highlight:member-edits#2
 where
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
 then
   RequestBoundary.respond (requestId)
 ```
@@ -538,14 +542,14 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
 where
   RoomJoining._getParticipant (participant) has (active: true)
   no view "the active lobby of (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
 then
   RequestBoundary.respond (error: "ROOM_NOT_OPEN", requestId)
 ```
@@ -554,13 +558,13 @@ then
 
 Authored path: `Annotations.Highlight`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 3.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 13.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 18.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Highlight
 where
   view "the active lobby of (participant)" with (participant)
-  earlier, RequestBoundary.request (coord, game, path: "/annotations/highlight", requestId, session)
+  earlier, RequestBoundary.request (coords, game, path: "/annotations/highlight", requestId, session)
   no view "whether (participant) may annotate (game)" with (game, participant)
 then
   RequestBoundary.respond (error: "GAME_NOT_CURRENT", requestId)
@@ -570,7 +574,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when RequestBoundary.request (coord, game, path: "/annotations/remove", requestId, session)
@@ -582,7 +586,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Remove
@@ -597,7 +601,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Remove
@@ -613,7 +617,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Remove
@@ -629,7 +633,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Annotating.remove (item, user: participant), asked by Annotations.Remove:member-edits#2
@@ -643,7 +647,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Remove
@@ -659,7 +663,7 @@ then
 
 Authored path: `Annotations.Remove`.
 - Covered by [Annotations](../design/compositions/Annotations.md), line 4.
-- Covered by [Annotations](../design/compositions/Annotations.md), line 14.
+- Covered by [Annotations](../design/compositions/Annotations.md), line 19.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Annotations.Remove
@@ -695,7 +699,7 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
@@ -707,7 +711,7 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Chord
@@ -722,7 +726,7 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Chord
@@ -738,11 +742,26 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when MinesweeperPlaying.chord (coord, game, now: instant), asked by Game.Chord:member-moves#2
 where
+  earlier, Sessioning.current (session, subject: participant), asked by Game.Chord
+then
+  Annotating.clear (user: participant)
+```
+
+### Game.Chord:member-moves#4
+
+Authored path: `Game.Chord`.
+- Covered by [Game](../design/compositions/Game.md), line 14.
+- Covered by [Game](../design/compositions/Game.md), line 26.
+
+```reaction
+when Annotating.clear (user: participant), asked by Game.Chord:member-moves#3
+where
+  earlier, MinesweeperPlaying.chord (coord, game, now: instant), asked by Game.Chord:member-moves#2
   earlier, RequestBoundary.request (coord, game, path: "/game/chord", requestId, session, since)
 then
   RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
@@ -752,7 +771,7 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Chord
@@ -768,7 +787,7 @@ then
 
 Authored path: `Game.Chord`.
 - Covered by [Game](../design/compositions/Game.md), line 14.
-- Covered by [Game](../design/compositions/Game.md), line 23.
+- Covered by [Game](../design/compositions/Game.md), line 26.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Chord
@@ -783,8 +802,8 @@ then
 ### Game.Current
 
 Authored path: `Game.Current`.
-- Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 32.
+- Covered by [Game](../design/compositions/Game.md), line 29.
+- Covered by [Game](../design/compositions/Game.md), line 35.
 
 ```reaction
 when RequestBoundary.request (path: "/game/current", requestId, session)
@@ -795,8 +814,8 @@ then
 ### Game.Current:current-game#2
 
 Authored path: `Game.Current`.
-- Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 32.
+- Covered by [Game](../design/compositions/Game.md), line 29.
+- Covered by [Game](../design/compositions/Game.md), line 35.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -811,8 +830,8 @@ then
 ### Game.Current:inactive#2
 
 Authored path: `Game.Current`.
-- Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 32.
+- Covered by [Game](../design/compositions/Game.md), line 29.
+- Covered by [Game](../design/compositions/Game.md), line 35.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -826,8 +845,8 @@ then
 ### Game.Current:no-game#2
 
 Authored path: `Game.Current`.
-- Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 32.
+- Covered by [Game](../design/compositions/Game.md), line 29.
+- Covered by [Game](../design/compositions/Game.md), line 35.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -842,8 +861,8 @@ then
 ### Game.Current:room-unavailable#2
 
 Authored path: `Game.Current`.
-- Covered by [Game](../design/compositions/Game.md), line 26.
-- Covered by [Game](../design/compositions/Game.md), line 32.
+- Covered by [Game](../design/compositions/Game.md), line 29.
+- Covered by [Game](../design/compositions/Game.md), line 35.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Current
@@ -859,7 +878,7 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
@@ -871,7 +890,7 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Flag
@@ -886,7 +905,7 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Flag
@@ -902,11 +921,26 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when MinesweeperPlaying.flag (coord, game, value), asked by Game.Flag:member-moves#2
 where
+  earlier, Sessioning.current (session, subject: participant), asked by Game.Flag
+then
+  Annotating.clear (user: participant)
+```
+
+### Game.Flag:member-moves#4
+
+Authored path: `Game.Flag`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 25.
+
+```reaction
+when Annotating.clear (user: participant), asked by Game.Flag:member-moves#3
+where
+  earlier, MinesweeperPlaying.flag (coord, game, value), asked by Game.Flag:member-moves#2
   earlier, RequestBoundary.request (coord, game, path: "/game/flag", requestId, session, since, value)
 then
   RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
@@ -916,7 +950,7 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Flag
@@ -932,7 +966,7 @@ then
 
 Authored path: `Game.Flag`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 22.
+- Covered by [Game](../design/compositions/Game.md), line 25.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Flag
@@ -948,7 +982,7 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
@@ -960,7 +994,7 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
@@ -975,7 +1009,7 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
@@ -991,11 +1025,26 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when MinesweeperPlaying.reveal (coord, game, now: instant), asked by Game.Reveal:member-moves#2
 where
+  earlier, Sessioning.current (session, subject: participant), asked by Game.Reveal
+then
+  Annotating.clear (user: participant)
+```
+
+### Game.Reveal:member-moves#4
+
+Authored path: `Game.Reveal`.
+- Covered by [Game](../design/compositions/Game.md), line 13.
+- Covered by [Game](../design/compositions/Game.md), line 24.
+
+```reaction
+when Annotating.clear (user: participant), asked by Game.Reveal:member-moves#3
+where
+  earlier, MinesweeperPlaying.reveal (coord, game, now: instant), asked by Game.Reveal:member-moves#2
   earlier, RequestBoundary.request (coord, game, path: "/game/reveal", requestId, session, since)
 then
   RequestBoundary.respond (changes: former "the committed board changes" with (game, since), game, requestId)
@@ -1005,7 +1054,7 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
@@ -1021,7 +1070,7 @@ then
 
 Authored path: `Game.Reveal`.
 - Covered by [Game](../design/compositions/Game.md), line 13.
-- Covered by [Game](../design/compositions/Game.md), line 21.
+- Covered by [Game](../design/compositions/Game.md), line 24.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Reveal
@@ -1138,8 +1187,8 @@ then
 ### Game.Updates
 
 Authored path: `Game.Updates`.
-- Covered by [Game](../design/compositions/Game.md), line 35.
-- Covered by [Game](../design/compositions/Game.md), line 57.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 60.
 
 ```reaction
 when RequestBoundary.request (cursors, game, path: "/game/updates", requestId, session, since)
@@ -1150,8 +1199,8 @@ then
 ### Game.Updates:current-updates#2
 
 Authored path: `Game.Updates`.
-- Covered by [Game](../design/compositions/Game.md), line 35.
-- Covered by [Game](../design/compositions/Game.md), line 57.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 60.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Updates
@@ -1168,8 +1217,8 @@ then
 ### Game.Updates:inactive#2
 
 Authored path: `Game.Updates`.
-- Covered by [Game](../design/compositions/Game.md), line 35.
-- Covered by [Game](../design/compositions/Game.md), line 57.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 60.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Updates
@@ -1183,8 +1232,8 @@ then
 ### Game.Updates:no-game#2
 
 Authored path: `Game.Updates`.
-- Covered by [Game](../design/compositions/Game.md), line 35.
-- Covered by [Game](../design/compositions/Game.md), line 57.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 60.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Updates
@@ -1199,8 +1248,8 @@ then
 ### Game.Updates:room-unavailable#2
 
 Authored path: `Game.Updates`.
-- Covered by [Game](../design/compositions/Game.md), line 35.
-- Covered by [Game](../design/compositions/Game.md), line 57.
+- Covered by [Game](../design/compositions/Game.md), line 38.
+- Covered by [Game](../design/compositions/Game.md), line 60.
 
 ```reaction
 when Sessioning.current (session, subject: participant), asked by Game.Updates
@@ -1758,7 +1807,7 @@ the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
 - `/annotations/clear` — requires `session`, `game`
-- `/annotations/highlight` — requires `session`, `game`, `coord`
+- `/annotations/highlight` — requires `session`, `game`, `coords`
 - `/annotations/remove` — requires `session`, `game`, `coord`
 - `/game/chord` — requires `session`, `game`, `coord`, `since`
 - `/game/current` — requires `session`

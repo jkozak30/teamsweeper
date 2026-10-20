@@ -15,7 +15,10 @@ and [chord](reaction:Game.Chord). The
 [play permission view](view:Game.PlayableGame) requires active membership
 in an open room whose [current game](view:Game.CurrentGame) matches
 the request. Reveal and Chord use the engine's timestamp;
-MinesweeperPlaying enforces move rules and win/loss.
+MinesweeperPlaying enforces move rules and win/loss. After permission checks,
+the same request clears the requester’s annotations after a successful move.
+This preserves clear-on-click behavior without a separate HTTP round trip.
+Unauthorized and refused moves do not clear annotations.
 
 ```endpoints
 Game.Reveal at /game/reveal

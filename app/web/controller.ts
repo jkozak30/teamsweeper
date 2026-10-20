@@ -555,8 +555,10 @@ export function useTeamsweeperController() {
     const canMove = !finished.value;
 
     return run("board", async options => {
-      check(await api.annotations.clear({ game }, options));
-      if (!canMove) return;
+      if (!canMove) {
+        check(await api.annotations.clear({ game }, options));
+        return;
+      }
 
       const since = Math.max(0, boardRevision);
       const result = kind === "flag"
@@ -611,7 +613,7 @@ export function useTeamsweeperController() {
     return run("board", async options => {
       check(removing
         ? await api.annotations.remove({ game, coord }, options)
-        : await api.annotations.highlight({ game, coord }, options));
+        : await api.annotations.highlight({ game, coords: [coord] }, options));
     }, () => {
       const cell = state.snapshot!.cells[id]!;
       setCell(state.snapshot!.cells, id, {
@@ -638,9 +640,7 @@ export function useTeamsweeperController() {
     if (!additions.length) return;
 
     return run("board", async options => {
-      for (const coord of additions) {
-        check(await api.annotations.highlight({ game, coord }, options));
-      }
+      check(await api.annotations.highlight({ game, coords: additions }, options));
     }, () => {
       for (const coord of additions) {
         const id = cellId(coord, width);

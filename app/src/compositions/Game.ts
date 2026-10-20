@@ -3,7 +3,7 @@ import { compute, each, former, no, now, view, where, whether } from "@mit-sdg/s
 import { CellHighlights } from "./Annotations.ts";
 import { concepts, computations } from "../concepts.ts";
 
-const { RoomJoining, Sessioning, MinesweeperPlaying } = concepts;
+const { RoomJoining, Sessioning, MinesweeperPlaying, Annotating } = concepts;
 
 // Validate request shapes; concepts still enforce the game rules.
 function input(kind: "start" | "current" | "updates" | "reveal" | "flag" | "chord"): EndpointValidator {
@@ -188,6 +188,7 @@ function move(kind: "reveal" | "flag" | "chord") {
             now(instant),
           )
             .then(action.responds({}))
+            .then(Annotating.clear({ user: participant }).responds({}))
             .then(respond({ game, changes: BoardChanges({ game, since }) }))
             .named("member-moves"),
 

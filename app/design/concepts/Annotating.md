@@ -18,6 +18,9 @@ external User
 external Item
   The target of a highlight.
 
+opaque Items
+  A sequence of Item identities.
+
 opaque Cursors
   A record mapping user identities to content cursor strings.
 
@@ -38,13 +41,11 @@ Rule: At most one annotation has any given author and target pair.
 ## Actions
 
 ```actions
-highlight(user: User, item: Item) : returns ()
-  where an annotation exists with author user and target item
+highlight(user: User, items: Items) : returns ()
+  where true
   then
-    refuses ALREADY_HIGHLIGHTED "You have already highlighted that item."
-  where no annotation exists with author user and target item
-  then
-    create an annotation with author user and target item
+    create an annotation with author user for each distinct item not already highlighted by that user
+    preserve existing annotations, including those of other authors
     returns
 
 remove(user: User, item: Item) : returns ()

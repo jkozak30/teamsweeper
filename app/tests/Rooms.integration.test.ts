@@ -1,3 +1,4 @@
+import { MAX_NAME_LENGTH } from "../src/limits.ts";
 import { checkInvariants } from "./state-checks.ts";
 import { cleanupSessions } from "../src/session-cleanup.ts";
 import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
@@ -384,7 +385,7 @@ test("cleanup removes expired members and annotations, transfers host, and close
   const bob = await post("join", { name: "Bob", code: alice.data.code });
   const participant = stringField(alice.data, "participant");
   const item = { game: "cleanup-fixture", coord: { row: 0, column: 0 } };
-  expect(await concepts.Annotating.highlight({ user: participant, item })).toEqual({});
+  expect(await concepts.Annotating.highlight({ user: participant, items: [item] })).toEqual({});
   now = new Date(now.getTime() + 60_000);
   // Call Sessioning directly: a Rooms renewal would remove the absent host early.
   const renewed = await concepts.Sessioning.renew({
@@ -456,4 +457,20 @@ test("host reassignment authenticates the actor and immediately transfers author
   expect((await post("current", {}, bobCookie)).data.host).toBe(target);
   expect(await rooms._activeParticipants({ room: stringField(alice.data, "room") })).toHaveLength(2);
   expect((await post("reassign-host", { newHost: alice.data.participant }, aliceCookie)).response.status).toBe(403);
+});
+
+
+test("HTTP create and join enforce name limits without issuing a session", async () => {
+  const host = await post("create", { name: "Alice" });
+  expect(host.response.status).toBe(200);
+  for (const name of [" ", "n".repeat(MAX_NAME_LENGTH + 1)]) {
+    for (const action of ["create", "join"]) {
+      const before = await testDb.db.collection("roomJoining.participants").countDocuments();
+      const result = await post(action, { name, ...(action === "join" ? { code: host.data.code } : {}) });
+      expect(result.response.status).toBe(400);
+      expect(result.data.error).toBe("INVALID_REQUEST");
+      expect(result.response.headers.get("Set-Cookie")).toBeNull();
+      expect(await testDb.db.collection("roomJoining.participants").countDocuments()).toBe(before);
+    }
+  }
 });

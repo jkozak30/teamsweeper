@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { MongoServerError, type Collection, type Db } from "mongodb";
+import { type Collection, type Db } from "mongodb";
 
-export class AlreadyHighlighted extends Error {}
 export class HighlightNotFound extends Error {}
 
 type JsonValue =
@@ -38,23 +37,21 @@ export class AnnotatingConcept {
     this.annotations = db.collection<AnnotationDocument>("annotating.annotations");
   }
 
-  async highlight({ user, item }: { user: string; item: Item }) {
-    const target = canonical(item) as Item;
-
-    try {
-      await this.annotations.insertOne({
-        _id: JSON.stringify([user, target]),
-        author: user,
-        target,
-      });
-    } catch (error) {
-      if (error instanceof MongoServerError && error.code === 11000) {
-        throw new AlreadyHighlighted("You have already highlighted that item.");
-      }
-
-      throw error;
+  async highlight({ user, items }: { user: string; items: Item[] }) {
+    // Normalize every target before writing; equivalent targets are added once.
+    const targets = new Map(items.map(item => {
+      const target = canonical(item) as Item;
+      return [JSON.stringify([user, target]), target] as const;
+    }));
+    if (targets.size) {
+      await this.annotations.bulkWrite([...targets].map(([_id, target]) => ({
+        updateOne: {
+          filter: { _id },
+          update: { $setOnInsert: { author: user, target } },
+          upsert: true,
+        },
+      })));
     }
-
     return {};
   }
 

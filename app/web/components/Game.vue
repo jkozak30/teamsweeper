@@ -97,6 +97,7 @@ function openSettings(event: Event) {
         <li>Left-click a number to chord.</li>
         <li>Middle-click or H+left-click to highlight.</li>
         <li>Middle-drag or H+left-drag to highlight multiple cells.</li>
+        <li>(Host-only) To restart with a fresh game, click the board's top bar, or "Start new game".</li>
       </ul>
     </details>
 

@@ -36,6 +36,7 @@ a set of Participants with
   a name String
   an active Flag
 
+Rule: New participant names are trimmed, nonempty, and at most 32 UTF-16 code units.
 Rule: Every open room has an active host belonging to that room.
 Rule: Closed rooms have no active participants and no host.
 Rule: A room's currentGame, when present, belongs to its games.
@@ -46,27 +47,33 @@ Rule: A game belongs to at most one room's games.
 
 ```actions
 create(name: String) : returns (room: Room, participant: Participant, code: String)
-  where name is nonempty
+  where the trimmed name is nonempty and at most 32 UTF-16 code units
   then
     generate a random code not shared by any other room
     create a new room with that code, status OPEN, no host, no currentGame, and an empty games set
-    create a new participant with that room, the given name, and active true
+    create a new participant with that room, the trimmed name, and active true
     set the room's host to that participant
     returns room, participant, code
-  where name is empty
+  where the trimmed name exceeds 32 UTF-16 code units
+  then
+    refuses CREATE_NAME_TOO_LONG "Use a display name of at most 32 characters."
+  where the trimmed name is empty
   then
     refuses CREATE_NAME_REQUIRED "Enter a display name to create a room."
 
 join(code: String, name: String) : returns (participant: Participant)
-  where name is empty
+  where the trimmed name exceeds 32 UTF-16 code units
+  then
+    refuses JOIN_NAME_TOO_LONG "Use a display name of at most 32 characters."
+  where the trimmed name is empty
   then
     refuses JOIN_NAME_REQUIRED "Enter a display name to join a room."
-  where name is nonempty and no OPEN room has the given code
+  where the trimmed name is nonempty and at most 32 UTF-16 code units and no OPEN room has the given code
   then
     refuses ROOM_UNAVAILABLE "No open room has that code."
-  where name is nonempty and an OPEN room has the given code
+  where the trimmed name is nonempty and at most 32 UTF-16 code units and an OPEN room has the given code
   then
-    create a new participant with that room, the given name, and active true
+    create a new participant with that room, the trimmed name, and active true
     returns participant
 
 leave(participant: Participant) : returns ()

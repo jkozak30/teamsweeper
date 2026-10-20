@@ -67,7 +67,7 @@ async function opening(game: string, cookie: string) {
   const result = await withMinePlacement(() => 0, () => move("reveal", game, cookie, 1, 1));
   expect(result.status).toBe(200);
   expect(result.data.changes.update.status).toBe("PLAYING");
-  // Preserve the existing positive-elapsed-time statistics rule.
+  // Exercise an ordinary positive-duration finish separately from first-click wins.
   await new Promise(resolve => setTimeout(resolve, 10));
 }
 
@@ -269,4 +269,26 @@ test("outcome and board filters work independently and together before ranking a
     expect(result.data.ranking.results[0].measurements).toHaveLength(1);
   }
   expect((await post("rankings/rank", { metric: "Time", ascending: true, status: "PLAYING" }, alice.cookie)).status).toBe(400);
+});
+
+
+test("a guaranteed first-click win is recorded once with finite statistics", async () => {
+  const host = await enter("Alice");
+  const started = await post("game/start", {
+    room: host.room, settings: { height: 1, width: 2, mines: 1 },
+  }, host.cookie);
+  expect(started.status).toBe(200);
+  const game = started.data.game;
+  const won = await move("reveal", game, host.cookie, 0, 0);
+  expect(won.status).toBe(200);
+  expect(won.data.changes.update.status).toBe("WON");
+  expect(won.data.changes.update.results).toHaveLength(1);
+  expect(won.data.changes.update.results[0].time).toBe(0);
+  const result = await post("rankings/result", { item: game }, host.cookie);
+  expect(result.status).toBe(200);
+  expect(result.data.result.measurements.every((value: { value: number }) => Number.isFinite(value.value))).toBe(true);
+  const ranked = await post("rankings/rank", { metric: "Time", ascending: true }, host.cookie);
+  expect(ranked.data.ranking.results.map((row: { item: string }) => row.item)).toEqual([game]);
+  await post("game/current", {}, host.cookie);
+  expect(await saved().countDocuments({ _id: game })).toBe(1);
 });

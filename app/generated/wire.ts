@@ -24,12 +24,12 @@ export type TeamsweeperWire = {
   };
   "/annotations/highlight": {
     input: {
-      "coord": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.computations)["gameCell"]["fn"]>[0], ["coord"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["coord"]>]>>;
-      "game": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>>;
+      "coords": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["validateGameCells"]["fn"]>[0], ["coords"]>>;
+      "game": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.computations)["validateGameCells"]["fn"]>[0], ["game"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>[0], ["game"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>]>>;
       "session": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
     };
     output: Record<string, never>;
-    error: { error: AppWideError | "ALREADY_HIGHLIGHTED" | "GAME_NOT_CURRENT" | "INVALID_COORDINATE" | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
+    error: { error: AppWideError | "GAME_NOT_CURRENT" | "INVALID_COORDINATE" | "INVALID_INPUT" | "PARTICIPANT_NOT_ACTIVE" | "ROOM_NOT_OPEN" | "UNKNOWN_SESSION" };
   };
   "/annotations/remove": {
     input: {
@@ -206,7 +206,7 @@ export type TeamsweeperWire = {
       "room": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["create"]>>, ["room"]>>;
       "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["session"]>>;
     };
-    error: { error: AppWideError | "CREATE_NAME_REQUIRED" | "INVALID_INPUT" };
+    error: { error: AppWideError | "CREATE_NAME_REQUIRED" | "CREATE_NAME_TOO_LONG" | "INVALID_INPUT" };
   };
   "/rooms/current": {
     input: {
@@ -236,7 +236,7 @@ export type TeamsweeperWire = {
       "participant": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>[0], ["subject"]>>;
       "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Sessioning"]["start"]>>, ["session"]>>;
     };
-    error: { error: AppWideError | "INVALID_INPUT" | "JOIN_NAME_REQUIRED" | "ROOM_UNAVAILABLE" };
+    error: { error: AppWideError | "INVALID_INPUT" | "JOIN_NAME_REQUIRED" | "JOIN_NAME_TOO_LONG" | "ROOM_UNAVAILABLE" };
   };
   "/rooms/leave": {
     input: {
@@ -279,8 +279,8 @@ export type TeamsweeperWireHttp = {
   };
   "/annotations/highlight": {
     input: {
-      "coord": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.computations)["gameCell"]["fn"]>[0], ["coord"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_visibleCells"]>>>, ["coord"]>]>>;
-      "game": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>>;
+      "coords": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["validateGameCells"]["fn"]>[0], ["coords"]>>;
+      "game": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationConceptSet.computations)["validateGameCells"]["fn"]>[0], ["game"]>, AtPath<Parameters<(typeof ApplicationConceptSet.concepts)["MinesweeperPlaying"]["_getGame"]>[0], ["game"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["RoomJoining"]["_getRoom"]>>>, ["currentGame"]>]>>;
     };
     output: Record<string, never>;
     error: { error: HttpAppWideError | "CONFLICT" | "FORBIDDEN" | "INVALID_REQUEST" | "UNAUTHORIZED" };

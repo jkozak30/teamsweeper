@@ -13,6 +13,8 @@ import {
   RoomJoiningConcept,
   CreateNameRequired,
   JoinNameRequired,
+  CreateNameTooLong,
+  JoinNameTooLong,
   RoomUnavailable,
   ParticipantNotActive,
   RoomNotOpen,
@@ -35,7 +37,6 @@ import {
 
 import {
   AnnotatingConcept,
-  AlreadyHighlighted,
   HighlightNotFound,
 } from "./concepts/Annotating.ts";
 
@@ -60,6 +61,8 @@ const roomJoining = registerConcept({
   refusals: {
     CREATE_NAME_REQUIRED: CreateNameRequired,
     JOIN_NAME_REQUIRED: JoinNameRequired,
+    CREATE_NAME_TOO_LONG: CreateNameTooLong,
+    JOIN_NAME_TOO_LONG: JoinNameTooLong,
     ROOM_UNAVAILABLE: RoomUnavailable,
     PARTICIPANT_NOT_ACTIVE: ParticipantNotActive,
     ROOM_NOT_OPEN: RoomNotOpen,
@@ -91,7 +94,6 @@ const annotating = registerConcept({
   class: AnnotatingConcept,
   spec: annotatingSpec,
   refusals: {
-    ALREADY_HIGHLIGHTED: AlreadyHighlighted,
     HIGHLIGHT_NOT_FOUND: HighlightNotFound,
   },
 });
@@ -128,6 +130,16 @@ export const applicationConceptSet = conceptSet({
     knownGame === game ? since : -1,
   annotationCursor: ({ cursors, author }: { cursors: Record<string, string>; author: string }) =>
     cursors[author] ?? "",
+  validateGameCells: ({ game, coords, settings }: {
+    game: string;
+    coords: { row: number; column: number }[];
+    settings: { height: number; width: number };
+  }) => {
+    const valid = coords.every(({ row, column }) =>
+      Number.isSafeInteger(row) && Number.isSafeInteger(column) &&
+      row >= 0 && column >= 0 && row < settings.height && column < settings.width);
+    return { valid, items: valid ? coords.map(({ row, column }) => ({ game, coord: { row, column } })) : [] };
+  },
   gameCell: ({ game, coord }: {
     game: string;
     coord: { row: number; column: number };

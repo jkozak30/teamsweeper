@@ -1,4 +1,4 @@
-import { MAX_BOARD_DIMENSION, INVALID_BOARD_SETTINGS } from "../board-limits.ts";
+import { MAX_BOARD_DIMENSION, INVALID_BOARD_SETTINGS } from "../limits.ts";
 import { randomInt } from "node:crypto";
 import type { Collection, Db } from "mongodb";
 
@@ -216,9 +216,8 @@ export class MinesweeperPlayingConcept {
     if ((document.status !== "WON" && document.status !== "LOST") ||
         !document.startedAt || !document.endedAt) return [];
     const time = (document.endedAt.getTime() - document.startedAt.getTime()) / 1000;
-    if (time <= 0) return [];
     const { bv, solved } = this.#measureBV(document);
-    return [{ time, bv, clicks: document.clicks, speed: solved / time, efficiency: solved / document.clicks }];
+    return [{ time, bv, clicks: document.clicks, speed: time === 0 ? 0 : solved / time, efficiency: solved / document.clicks }];
   }
 
   // Checks the requirements shared by every move

@@ -428,7 +428,7 @@ test("annotations sync independently and leaving removes the author from the upd
   const bob = await enter("Bob", alice.code);
   const game = await start(alice);
   const initial = await updates(bob.cookie);
-  expect((await post("annotations/highlight", { game, coord: { row: 0, column: 0 } }, alice.cookie))
+  expect((await post("annotations/highlight", { game, coords: [{ row: 0, column: 0 }] }, alice.cookie))
     .response.status).toBe(200);
   const highlighted = await updates(bob.cookie, game, 0, cursors(initial));
   expect(highlighted.changes.update.cells).toEqual([]);

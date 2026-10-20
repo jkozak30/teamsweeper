@@ -1,6 +1,6 @@
 import { checkRefusal, checkInvariants } from "./state-checks.ts";
 import { afterEach, afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { AnnotatingConcept, AlreadyHighlighted, HighlightNotFound } from "../src/concepts/Annotating.ts";
+import { AnnotatingConcept, HighlightNotFound } from "../src/concepts/Annotating.ts";
 import { openTestDb, type TestDb } from "./test-db.ts";
 
 let testDb: TestDb;
@@ -27,7 +27,7 @@ afterAll(async () => {
 });
 
 test("a user highlights, removes, and highlights an item again", async () => {
-  expect(await annotating.highlight({ user: "alice", item: "cell-1" })).toEqual({});
+  expect(await annotating.highlight({ user: "alice", items: ["cell-1"] })).toEqual({});
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
   expect(await annotating._byUser({ user: "alice" })).toEqual([{ target: "cell-1" }]);
@@ -37,22 +37,22 @@ test("a user highlights, removes, and highlights an item again", async () => {
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([]);
   expect(await annotating._byUser({ user: "alice" })).toEqual([]);
 
-  await annotating.highlight({ user: "alice", item: "cell-1" });
+  await annotating.highlight({ user: "alice", items: ["cell-1"] });
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
 });
 
-test("duplicate highlights are refused without changing existing annotations", async () => {
-  await annotating.highlight({ user: "alice", item: "cell-1" });
+test("duplicate highlights succeed without duplicating existing annotations", async () => {
+  await annotating.highlight({ user: "alice", items: ["cell-1"] });
 
-  await refusesWithoutChange(() => annotating.highlight({ user: "alice", item: "cell-1" }), AlreadyHighlighted);
+  expect(await annotating.highlight({ user: "alice", items: ["cell-1"] })).toEqual({});
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
 });
 
 test("users can share a target and removing one highlight preserves the other", async () => {
-  await annotating.highlight({ user: "alice", item: "cell-1" });
-  await annotating.highlight({ user: "bob", item: "cell-1" });
+  await annotating.highlight({ user: "alice", items: ["cell-1"] });
+  await annotating.highlight({ user: "bob", items: ["cell-1"] });
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([
     { author: "alice" }, { author: "bob" },
@@ -66,7 +66,7 @@ test("users can share a target and removing one highlight preserves the other", 
 });
 
 test("missing and already-removed highlights are refused without removing another user's highlight", async () => {
-  await annotating.highlight({ user: "alice", item: "cell-1" });
+  await annotating.highlight({ user: "alice", items: ["cell-1"] });
 
   for (const input of [
     { user: "bob", item: "cell-1" },
@@ -84,7 +84,7 @@ test("missing and already-removed highlights are refused without removing anothe
 test("clear removes all of one user's highlights and is safe to repeat", async () => {
   for (const user of ["alice", "bob"]) {
     for (const item of ["cell-1", "cell-2"]) {
-      await annotating.highlight({ user, item });
+      await annotating.highlight({ user, items: [item] });
     }
   }
 
@@ -105,9 +105,9 @@ test("queries handle unknown identities and return persisted annotations in orde
   expect(await annotating._forItem({ item: "unknown" })).toEqual([]);
   expect(await annotating._byUser({ user: "unknown" })).toEqual([]);
 
-  await annotating.highlight({ user: "bob", item: "cell-2" });
-  await annotating.highlight({ user: "alice", item: "cell-2" });
-  await annotating.highlight({ user: "alice", item: "cell-1" });
+  await annotating.highlight({ user: "bob", items: ["cell-2"] });
+  await annotating.highlight({ user: "alice", items: ["cell-2"] });
+  await annotating.highlight({ user: "alice", items: ["cell-1"] });
 
   const restored = new AnnotatingConcept(testDb.db);
 
@@ -126,7 +126,7 @@ test("pair identities do not collide when names contain separators or quotes", a
     { user: 'a"b', item: "c" },
   ];
 
-  for (const pair of pairs) await annotating.highlight(pair);
+  for (const pair of pairs) await annotating.highlight({ user: pair.user, items: [pair.item] });
 
   expect(await annotating._byUser({ user: "a:b" })).toEqual([{ target: "c" }]);
   expect(await annotating._byUser({ user: "a" })).toEqual([{ target: "b:c" }]);
@@ -139,18 +139,11 @@ test("simultaneous duplicate highlights across instances create exactly one anno
   const input = { user: "alice", item: "cell-1" };
 
   const results = await Promise.allSettled([
-    annotating.highlight(input),
-    other.highlight(input),
+    annotating.highlight({ user: input.user, items: [input.item] }),
+    other.highlight({ user: input.user, items: [input.item] }),
   ]);
 
-  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-
-  const rejected = results.find(result => result.status === "rejected");
-  expect(rejected?.status).toBe("rejected");
-
-  if (rejected?.status === "rejected") {
-    expect(rejected.reason).toBeInstanceOf(AlreadyHighlighted);
-  }
+  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(2);
 
   expect(await annotating._forItem({ item: "cell-1" })).toEqual([{ author: "alice" }]);
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
@@ -166,14 +159,14 @@ test("compound items compare by value, including reordered object fields", async
     game: "game-1",
   };
 
-  await annotating.highlight({ user: "alice", item });
+  await annotating.highlight({ user: "alice", items: [item] });
 
   const restored = new AnnotatingConcept(testDb.db);
 
   expect(await restored._forItem({ item: equivalent })).toEqual([{ author: "alice" }]);
   expect(await restored._byUser({ user: "alice" })).toEqual([{ target: item }]);
 
-  await refusesWithoutChange(() => restored.highlight({ user: "alice", item: equivalent }), AlreadyHighlighted);
+  expect(await restored.highlight({ user: "alice", items: [equivalent] })).toEqual({});
 
   expect(
     await restored._forItem({ item: { ...item, game: "game-2" } }),
@@ -194,20 +187,15 @@ test("simultaneous equivalent compound items create only one annotation", async 
   const results = await Promise.allSettled([
     annotating.highlight({
       user: "alice",
-      item: { game: "g", coord: { row: 0, column: 1 } },
+      items: [{ game: "g", coord: { row: 0, column: 1 } }],
     }),
     other.highlight({
       user: "alice",
-      item: { coord: { column: 1, row: 0 }, game: "g" },
+      items: [{ coord: { column: 1, row: 0 }, game: "g" }],
     }),
   ]);
 
-  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-
-  const rejected = results.find(result => result.status === "rejected");
-  if (rejected?.status === "rejected") {
-    expect(rejected.reason).toBeInstanceOf(AlreadyHighlighted);
-  }
+  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(2);
 
   expect(await testDb.db.collection("annotating.annotations").countDocuments()).toBe(1);
   expect(await annotating._forItem({ item: { game: "g", coord: { row: 0, column: 1 } } }))
@@ -220,7 +208,7 @@ test("sync cursors suppress unchanged targets and detect additions, removals, an
   expect((await annotating._sync({ user: "alice", since: first.cursor })).targets).toBeNull();
 
   const item = { game: "g", coord: { row: 0, column: 1 } };
-  await annotating.highlight({ user: "alice", item });
+  await annotating.highlight({ user: "alice", items: [item] });
   const added = await annotating._sync({ user: "alice", since: first.cursor });
   expect(added.targets).toEqual([item]);
   expect(added.cursor).not.toBe(first.cursor);
@@ -229,7 +217,18 @@ test("sync cursors suppress unchanged targets and detect additions, removals, an
 
   await annotating.remove({ user: "alice", item });
   expect((await annotating._sync({ user: "alice", since: added.cursor })).targets).toEqual([]);
-  await annotating.highlight({ user: "alice", item });
+  await annotating.highlight({ user: "alice", items: [item] });
   await annotating.clear({ user: "alice" });
   expect((await annotating._sync({ user: "alice", since: added.cursor })).targets).toEqual([]);
+});
+
+test("batch highlighting is idempotent, canonical, and author-isolated", async () => {
+  const item = { game: "g", coord: { row: 0, column: 1 } };
+  await annotating.highlight({ user: "bob", items: [item] });
+  await annotating.highlight({ user: "alice", items: [item, "cell-2", item] });
+  await annotating.highlight({ user: "alice", items: [{ coord: { column: 1, row: 0 }, game: "g" }, "cell-2"] });
+  expect(await annotating._byUser({ user: "alice" })).toHaveLength(2);
+  expect(await annotating._forItem({ item })).toEqual([{ author: "alice" }, { author: "bob" }]);
+  await annotating.highlight({ user: "alice", items: [] });
+  expect(await annotating._byUser({ user: "alice" })).toHaveLength(2);
 });

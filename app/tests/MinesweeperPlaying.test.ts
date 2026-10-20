@@ -339,12 +339,18 @@ test("3BV counts separate zero regions and isolated numbers on a loss", async ()
   }]);
 });
 
-test("results omit zero-duration games and state survives a new instance", async () => {
-  const game = await fixture(3, 3, [0]);
+test("first-reveal wins have finite statistics and state survives a new instance", async () => {
+  const { game } = await playing.create({
+    settings: { height: 1, width: 2, mines: 1 },
+  });
 
-  await playing.reveal({ game, coord: coord(2, 0), now: start });
+  await playing.reveal({ game, coord: coord(0, 0), now: start });
 
-  expect(await playing._getResult({ game })).toEqual([]);
+  const result = (await playing._getResult({ game }))[0]!;
+  expect(result.time).toBe(0);
+  expect(result.clicks).toBe(1);
+  expect(result.speed).toBe(0);
+  expect(result.efficiency).toBe(1);
 
   const restored = new MinesweeperPlayingConcept(testDb.db);
 

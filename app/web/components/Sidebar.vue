@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { MAX_NAME_LENGTH } from "../../src/limits.ts";
 import { computed, ref } from "vue";
 import type { TeamsweeperWireHttp } from "../../generated/wire.ts";
 import { rankingMetrics, type RankingState } from "../controller.ts";
@@ -78,7 +79,7 @@ const currentName = computed(() =>
       <form class="entry-row" @submit.prevent="emit('create', name)">
         <label>
           Your name
-          <input v-model="name" autocomplete="nickname" />
+          <input v-model="name" autocomplete="nickname" :maxlength="MAX_NAME_LENGTH" />
         </label>
         <button :disabled="!name.trim()">Create</button>
       </form>
@@ -113,24 +114,25 @@ const currentName = computed(() =>
             </option>
           </select>
         </label>
-        <button class="filter-button" :aria-label="rankings.ascending ? 'Lowest first; switch to highest first' : 'Highest first; switch to lowest first'"
+        <button class="filter-button" :title="rankings.ascending ? 'Lowest first; switch to highest first' : 'Highest first; switch to lowest first'" :aria-label="rankings.ascending ? 'Lowest first; switch to highest first' : 'Highest first; switch to lowest first'"
           @click="rankings.ascending = !rankings.ascending">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
             <path :d="rankings.ascending ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'"
               fill="none" stroke="currentColor" stroke-width="2" />
           </svg>
         </button>
-        <button class="filter-button" :aria-pressed="rankings.wins" aria-label="Include wins"
+        <button class="filter-button" :aria-pressed="rankings.wins" title="Include wins" aria-label="Include wins"
           @click="rankings.wins = !rankings.wins">
           <img class="icon" src="/icons/win.svg" alt="" />
         </button>
-        <button class="filter-button" :aria-pressed="rankings.losses" aria-label="Include losses"
+        <button class="filter-button" :aria-pressed="rankings.losses" title="Include losses" aria-label="Include losses"
           @click="rankings.losses = !rankings.losses">
           <img class="icon" src="/icons/loss.svg" alt="" />
         </button>
         <button
           class="filter-button"
           :aria-pressed="rankings.matching"
+          title="Filter to match current settings"
           aria-label="Match current board settings"
           @click="rankings.matching = !rankings.matching"
         >

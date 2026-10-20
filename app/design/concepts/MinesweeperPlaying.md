@@ -165,13 +165,13 @@ _visibleCells(game: Game) : many (coord: Coordinate, revealed: Flag, flagged: Fl
   This query does not change the game.
 
 _getResult(game: Game) : optional (time: Number, bv: Number, clicks: Number, speed: Number, efficiency: Number)
-  Returns no row if the game does not exist, is not WON or LOST,
-  or has a nonpositive elapsed time.
-  Otherwise time is endedAt minus startedAt in seconds, and clicks is the recorded click count.
+  Returns no row if the game does not exist or is not WON or LOST.
+  Otherwise time is endedAt minus startedAt in seconds, including zero
+  for wins on the first reveal. clicks is the recorded click count.
   bv is the board's 3BV: the number of connected zero-cell regions plus
   the number of safe numbered cells outside every zero region's numbered boundary.
   solved3BV counts zero regions opened by a revealed zero and revealed numbered
   cells outside every zero region's numbered boundary.
-  speed is solved3BV divided by time.
+  speed is zero when time is zero; otherwise it is solved3BV divided by time.
   efficiency is solved3BV divided by clicks.
 ```

@@ -1,7 +1,10 @@
+import { MAX_NAME_LENGTH, INVALID_NAME_LENGTH } from "../limits.ts";
 import { MongoServerError, type Collection, type Db } from "mongodb";
 
 export class CreateNameRequired extends Error {}
 export class JoinNameRequired extends Error {}
+export class CreateNameTooLong extends Error {}
+export class JoinNameTooLong extends Error {}
 export class RoomUnavailable extends Error {}
 export class ParticipantNotActive extends Error {}
 export class RoomNotOpen extends Error {}
@@ -37,6 +40,8 @@ export class RoomJoiningConcept {
   }
 
   async create({ name }: { name: string }) {
+    name = name.trim();
+    if (name.length > MAX_NAME_LENGTH) throw new CreateNameTooLong(INVALID_NAME_LENGTH);
     if (name.length === 0) {
       throw new CreateNameRequired("Enter a display name to create a room.");
     }
@@ -78,6 +83,8 @@ export class RoomJoiningConcept {
   }
 
   async join({ code, name }: { code: string; name: string }) {
+    name = name.trim();
+    if (name.length > MAX_NAME_LENGTH) throw new JoinNameTooLong(INVALID_NAME_LENGTH);
     if (name.length === 0) {
       throw new JoinNameRequired("Enter a display name to join a room.");
     }
