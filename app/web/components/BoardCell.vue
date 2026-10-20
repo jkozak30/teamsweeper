@@ -61,7 +61,7 @@ function label(cell: Cell) {
 <template>
   <button type="button" :aria-disabled="props.busy"
     :style="{ '--highlight': background }" :aria-label="description"
-    @mousedown="event => { if (event.button === 1) event.preventDefault(); }"
+    @mousedown.prevent
     @auxclick.prevent @dragstart.prevent>
     <img :src="`/skins/hd/${image}.svg`" alt="" draggable="false" />
   </button>
