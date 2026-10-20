@@ -59,12 +59,10 @@ export function useTeamsweeperController() {
 
   const busy = ref(true);
   const boardPending = ref(false);
-  const pendingCell = ref<string | null>(null);
   const pendingCells = ref<string[]>([]);
   const queuedActions = ref(0);
   const controlsPending = computed(() => boardPending.value || queuedActions.value > 0);
   const syncProblem = ref(false);
-  const lastSynced = ref(0);
   const clock = ref(Date.now());
 
   const isHost = computed(() =>
@@ -212,7 +210,6 @@ export function useTeamsweeperController() {
       state.displayedMetric = metric;
       state.rows = result.ranking.results.slice(0, 10);
       state.loaded = true;
-      state.rows = result.ranking.results.slice(0, 10);
       state.total = result.ranking.total;
       state.more = state.page * 10 < state.total;
       const lastPage = Math.max(1, Math.ceil(state.total / 10));
@@ -362,7 +359,6 @@ export function useTeamsweeperController() {
         } catch { /* Keep confirmed statistics if the saved read fails. */ }
       }
       if (obsolete()) return;
-      lastSynced.value = Date.now();
       clock.value = Date.now();
       syncProblem.value = false;
     })().finally(() => {
@@ -406,7 +402,6 @@ export function useTeamsweeperController() {
     mode: "room" | "board",
     operation: (options: ClientCallOptions) => Promise<void | boolean>,
     optimistic?: () => void,
-    coord?: Coordinate,
   ) {
     if (busy.value || boardPending.value || disposed) return;
 
@@ -424,7 +419,6 @@ export function useTeamsweeperController() {
     }
     else boardPending.value = true;
 
-    pendingCell.value = coord ? key(coord) : null;
     status.value = "";
 
     // Older reads cannot overwrite this action's local feedback.
@@ -464,7 +458,6 @@ export function useTeamsweeperController() {
         try {
           if (!confirmedBoard) await refreshState(mode === "board" ? "game" : "full");
           else {
-            lastSynced.value = Date.now();
             clock.value = Date.now();
             syncProblem.value = false;
           }
@@ -476,7 +469,6 @@ export function useTeamsweeperController() {
         }
       }
 
-      pendingCell.value = null;
       busy.value = false;
       boardPending.value = false;
     }
@@ -592,7 +584,7 @@ export function useTeamsweeperController() {
         flagsRemaining,
         clicks: snapshot.clicks + (kind === "flag" && canMove ? 1 : 0),
       };
-    }), kind === "flag" ? undefined : coord);
+    }));
   }
 
   function performToggleHighlight(coord: Coordinate) {
@@ -759,7 +751,6 @@ export function useTeamsweeperController() {
     status,
     busy,
     boardPending,
-    pendingCell,
     pendingCells,
     controlsPending,
     syncProblem,

@@ -169,7 +169,7 @@ const BoardChanges = former(
 function move(kind: "reveal" | "flag" | "chord") {
   return endpoint(
     `/game/${kind}`,
-    ({ session, game, coord, value, since, participant, instant, update }) => {
+    ({ session, game, coord, value, since, participant, instant }) => {
       const fields = kind === "flag"
         ? { session, game, coord, value, since }
         : { session, game, coord, since };

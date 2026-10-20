@@ -75,11 +75,6 @@ function click(cell: Cell, event: MouseEvent) {
   }
 }
 
-function highlight(cell: Cell) {
-  if (props.busy || dragging.value) return;
-  emit("highlight", cell.coord);
-}
-
 function flag(cell: Cell) {
   if (props.busy || dragging.value) return;
 
@@ -206,7 +201,7 @@ watchEffect(() => {
   for (const id of pressedCells) if (!next.has(id)) pressedCells.delete(id);
   for (const id of next) if (!pressedCells.has(id)) pressedCells.add(id);
 }, { flush: "sync" });
-provide(boardContext, { props, pressedCells, visited, names, click, flag, highlight, begin, enter, release });
+provide(boardContext, { props, pressedCells, visited, names, click, flag, begin, enter, release });
 </script>
 
 <template>
