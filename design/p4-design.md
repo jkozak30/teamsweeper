@@ -34,7 +34,7 @@ The following list summarizes the key reaction principles and additions from P1:
 
 The sidebar/main-board layout and familiar Minesweeper appearance from P1 remain. 
 
-One key aspect of my P2 work was implementing the algorithm to assign players distinct, deterministic, and stateless annotation colors, which was a core feature I preserved into my final app. Colors are randomly selected, with randomness seeded based on the room and participant list identifiers. This allows visually distinct colors to be selected deterministically and consistently across all clients without needing to be stored in the backend. Additionally, color selection based on room ID adds some visual randomness with assigned colors (more fun for repeat users!).
+One key aspect of my P2 work was implementing the algorithm to assign players distinct, deterministic, and stateless annotation colors, which was a core feature I preserved into my final app. Colors are calculated from the room ID and sorted participant list: this allows visually distinct colors to be selected deterministically and consistently across all clients without needing to be stored in the backend. Additionally, color selection based on room ID adds some visual randomness with assigned colors (more fun for repeat users!).
 
 My [P3 visual study](https://github.com/jkozak30/teamsweeper/blob/4fc7df504a07a5924f3ed3e7d5b153c5148ccb0e/design/p3.md#visual-design-study) established the navy palette, typography, and raised/recessed surfaces. During P3, I simplified ranking controls into one metric selector and icon toggles, distinguished outcomes through icons and color, and emphasized the current result using color.
 

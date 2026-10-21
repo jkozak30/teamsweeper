@@ -84,7 +84,7 @@ bun run db:up
 bun run test
 ```
 
-A saved passing test run is available [here](design/refs/p3-tests.txt).
+A saved passing test run is available [here](design/refs/p4-tests.txt).
 
 3. When finished, you can stop the database (from `app/`):
 ```
