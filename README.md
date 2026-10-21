@@ -10,7 +10,7 @@ This repository contains Julia's personal project code and design for 6.1040.
   - [III. Concept design](design/p1.md#concept-design)
   - [IV. UI sketches](design/p1.md#ui-sketches)
   - [V. User journey](design/p1.md#user-journey)
-- [P2: Design](design/p2.md)
+- [P2: Alpha](design/p2.md)
   - [I. Core User Journey](design/p2.md#core-user-journey)
   - [II. Screen Recording](https://www.youtube.com/watch?v=moLanjo8Bjk)
 - [P3: Beta](design/p3.md)
@@ -19,6 +19,9 @@ This repository contains Julia's personal project code and design for 6.1040.
   - [III. Visual Design Study](design/p3.md#visual-design-study)
   - [IV. Core User Journey](design/p3.md#updated-core-user-journey)
   - [V. Screen Recording](https://youtu.be/Ga1wg9GUeek)
+- [P4: Code Complete](design/p4.md)
+  - [I. Demo Video](https://youtu.be/6Yp2CGgSmSA)
+  - [II. Design Document](design/p4-design.md)
 
 ## Instructions for Running Tests
 
